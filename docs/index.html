@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f9">
+  <meta name="description" content="SpindleGuard is an experimental macOS storage broker for more orderly AI-agent I/O. Explore the working queue prototype, recorded proof, and open-source code.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SpindleGuard — Give your drives room to breathe.">
+  <meta property="og:description" content="A calmer path from AI agents to physical storage. Explore the experimental macOS filesystem broker.">
+  <meta property="og:url" content="https://alienweb-cloud.github.io/spindleguard/">
+  <meta property="og:image" content="https://alienweb-cloud.github.io/spindleguard/social-card.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://alienweb-cloud.github.io/spindleguard/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+  <title>SpindleGuard — Give your drives room to breathe.</title>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead wrap">
+  <a class="brand" href="./" aria-label="SpindleGuard home"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13"/><circle cx="16" cy="16" r="7"/><circle cx="16" cy="16" r="2"/></svg>SpindleGuard<span class="brand-period">.</span></a>
+  <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#status">Project status</a><a class="nav-source" href="https://github.com/AlienWeb-cloud/spindleguard">GitHub <span aria-hidden="true">↗</span></a></nav>
+</header>
+<main id="main">
+  <section class="hero wrap" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="status-dot"></span> EXPERIMENTAL · BUILT FOR macOS</p>
+      <h1 id="hero-title">Give your drives<br>room to <em>breathe.</em></h1>
+      <p class="hero-description">AI agents move fast. Mechanical drives have moving parts. SpindleGuard is exploring a more orderly path between the two.</p>
+      <div class="hero-actions"><a class="button primary" href="https://github.com/AlienWeb-cloud/spindleguard">Explore the prototype <span aria-hidden="true">↗</span></a><a class="text-link" href="#how-it-works">See the queue in action <span aria-hidden="true">↓</span></a></div>
+      <p class="fine-print">Open-source prototype · C + FUSE · Disposable test data only</p>
+    </div>
+    <div class="drive-illustration" role="img" aria-label="Illustration of a hard drive platter with requests flowing through a single queue">
+      <div class="instrument-label"><span>STORAGE, WITH A LITTLE MORE ORDER</span><span>SG / 001</span></div>
+      <svg class="drive" viewBox="0 0 520 480" aria-hidden="true">
+        <defs>
+          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fafbfd"/><stop offset=".35" stop-color="#c5d0dc"/><stop offset=".5" stop-color="#eaf0f5"/><stop offset=".7" stop-color="#b3c2d0"/><stop offset="1" stop-color="#f0f3f6"/></linearGradient>
+          <linearGradient id="case" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f9fbfd"/><stop offset="1" stop-color="#d5dfe8"/></linearGradient>
+          <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="17" flood-color="#304a66" flood-opacity=".12"/></filter>
+        </defs>
+        <g transform="translate(68 48) rotate(-8 180 185)" filter="url(#shadow)">
+          <rect x="0" y="0" width="364" height="370" rx="27" fill="url(#case)" stroke="#b5c3cf"/>
+          <rect x="13" y="13" width="338" height="344" rx="18" fill="none" stroke="#c1ccd6"/>
+          <g fill="#8193a4"><circle cx="27" cy="27" r="4"/><circle cx="337" cy="27" r="4"/><circle cx="27" cy="343" r="4"/><circle cx="337" cy="343" r="4"/></g>
+          <circle cx="175" cy="163" r="132" fill="url(#metal)" stroke="#a4b4c3"/>
+          <g fill="none" stroke="#95a9bd" stroke-width=".65" opacity=".6"><circle cx="175" cy="163" r="120"/><circle cx="175" cy="163" r="108"/><circle cx="175" cy="163" r="96"/><circle cx="175" cy="163" r="84"/><circle cx="175" cy="163" r="72"/><circle cx="175" cy="163" r="60"/></g>
+          <path d="M175 32 A131 131 0 0 1 306 163" fill="none" stroke="#2458c9" stroke-width="3"/>
+          <circle cx="175" cy="163" r="39" fill="#e9eef3" stroke="#93a6b9"/>
+          <circle cx="175" cy="163" r="19" fill="#7b8fa3"/><circle cx="175" cy="163" r="9" fill="#d9e1e9"/>
+          <g fill="#5d7389"><circle cx="175" cy="135" r="3"/><circle cx="151" cy="177" r="3"/><circle cx="199" cy="177" r="3"/></g>
+          <path d="M303 281 L207 184 L196 188 L283 299 Z" fill="#edf2f7" stroke="#8aa0b5" stroke-width="2"/>
+          <circle cx="295" cy="291" r="23" fill="#c0cfdd" stroke="#8ca1b4"/><circle cx="295" cy="291" r="9" fill="#536d88"/>
+          <rect x="38" y="307" width="149" height="27" rx="4" fill="#fff" fill-opacity=".75"/><text x="48" y="325" font-family="monospace" font-size="10" letter-spacing="1.2" fill="#4e657b">ONE REQUEST AT A TIME</text>
+        </g>
+        <path d="M429 284 H483 V392 H422" stroke="#2458c9" stroke-width="1.5" fill="none"/>
+        <circle cx="429" cy="284" r="4" fill="#2458c9"/>
+        <g transform="translate(253 378)"><rect width="185" height="47" rx="8" fill="#2458c9"/><circle cx="21" cy="23.5" r="4" fill="#fff"/><text x="35" y="28" fill="#fff" font-family="monospace" font-size="11">NEXT REQUEST: WAITING</text></g>
+      </svg>
+      <div class="instrument-foot"><span>PROTECT THE PHYSICAL SPINDLE.</span><span>Design principle ↗</span></div>
+    </div>
+  </section>
+  <div class="scope-strip"><div class="wrap"><span class="scope-label">THE FIRST PROOF</span><p>Mount it. Read through it. Make a competing request wait.</p><a href="#proof">View the result <span aria-hidden="true">↗</span></a></div></div>
+  <section class="problem wrap section-space" aria-labelledby="problem-title">
+    <div><p class="eyebrow">THE PROBLEM IS PHYSICAL</p><h2 id="problem-title">A million files.<br>One moving head.</h2></div>
+    <div class="problem-copy"><p>An agent can launch a directory scan, a search and a large read in moments. On a mechanical drive, those competing requests can turn useful work into constant seeking.</p><p>The direction is simple: put a broker between applications and storage. Let busy drives finish work while the next request waits its turn.</p><p class="principle">Many paths on one physical drive should share one queue. That is the destination; this prototype starts with one source tree.</p></div>
+  </section>
+  <section class="bench-section" id="how-it-works" aria-labelledby="bench-title">
+    <div class="wrap section-space">
+      <div class="section-heading"><div><p class="eyebrow">BACKPRESSURE, MADE VISIBLE</p><h2 id="bench-title">A little patience.<br>A more orderly queue.</h2></div><p>When a supported backing operation is active, the next one waits. Try this illustration of the single-queue prototype.</p></div>
+      <div class="bench">
+        <div class="bench-top"><span><span class="status-dot"></span> QUEUE WORKBENCH</span><span>Illustration · no disk access</span></div>
+        <div class="flow"><span>Application</span><span aria-hidden="true">→</span><span>Virtual mount</span><span aria-hidden="true">→</span><span class="flow-broker">FIFO queue</span><span aria-hidden="true">→</span><span>Backing directory</span></div>
+        <div class="queue-layout">
+          <div class="queue-rows">
+            <div class="queue-row" id="request-one"><span class="request-number">A</span><div><strong>Read a large test file</strong><small>First request</small></div><span class="request-state" id="state-one">Ready</span><div class="progress" aria-hidden="true"><span id="progress-one"></span></div></div>
+            <div class="queue-row" id="request-two"><span class="request-number">B</span><div><strong>Inspect a second file</strong><small>Competing request</small></div><span class="request-state" id="state-two">Ready</span><div class="progress" aria-hidden="true"><span id="progress-two"></span></div></div>
+          </div>
+          <div class="queue-display"><span class="mono-label">ACTIVE OPERATIONS</span><div class="active-count"><span id="active-count">0</span><span>/ 1</span></div><p id="demo-status" role="status" aria-live="polite">Ready when you are. Start the demo to follow two requests.</p></div>
+        </div>
+        <div class="bench-controls"><button class="button primary" id="run-demo" type="button">Run queue demo <span aria-hidden="true">→</span></button><button class="reset" id="reset-demo" type="button" disabled>Reset</button><span>This illustrates request queueing, not a whole-copy reservation.</span></div>
+      </div>
+      <noscript><p>The interactive illustration needs JavaScript. In the prototype, request B queues while A is active, then starts after A finishes.</p></noscript>
+    </div>
+  </section>
+  <section class="proof wrap section-space" id="proof" aria-labelledby="proof-title">
+    <div><p class="eyebrow">RECORDED ON A REAL MOUNT</p><h2 id="proof-title">Small proof.<br>Real backpressure.</h2><p>Two independent client processes. A FUSE-T mount. Disposable files on an internal SSD. The second file’s metadata request waited while the first file’s reads held the queue.</p><a class="text-link" href="https://github.com/AlienWeb-cloud/spindleguard/blob/main/outputs/spindleguard/PROOF.md">Read the test evidence <span aria-hidden="true">↗</span></a></div>
+    <div class="measurement"><div class="measurement-top"><span>OBSERVED QUEUE WAIT</span><span>10 SEP 2026</span></div><div class="measurement-value">925.935<span>ms</span></div><p>The test deliberately slowed each read callback by 150 ms to expose waiting. This is a functional proof, not an HDD performance benchmark.</p><div class="measurement-result"><span class="checkmark" aria-hidden="true">✓</span> All mount tests passed</div></div>
+  </section>
+  <section class="status-section wrap section-space" id="status" aria-labelledby="status-title">
+    <div class="section-heading"><div><p class="eyebrow">BUILT IN THE OPEN</p><h2 id="status-title">Here is where we are.</h2></div><p>A first working experiment, with a clear boundary between demonstrated behavior and the larger ambition.</p></div>
+    <div class="status-columns"><article><h3><span class="stage-marker current"></span>Working today</h3><ul><li>Real macOS mount, reads and permitted writes</li><li>One FIFO queue around supported operations</li><li>Read-only default with an explicit write prefix</li><li>Queue logs and cross-process test evidence</li><li>Read-only APFS physical-device lookup</li></ul><span class="stage-caption">Available in the prototype</span></article><article><h3><span class="stage-marker next"></span>Next milestone</h3><ul><li>Shared physical-disk queues across roots</li><li>Copy-job reservations and cancellation</li><li>Agent confinement that prevents bypass</li><li>Scan limits, priorities and bandwidth controls</li></ul><span class="stage-caption">Planned · not implemented</span></article><article><h3><span class="stage-marker later"></span>Further out</h3><ul><li>An SSD-backed file index and metadata cache</li><li>Search without another full directory walk</li><li>Per-agent policies and process attribution</li><li>A view of every drive and its pending work</li></ul><span class="stage-caption">Future direction</span></article></div>
+    <aside class="test-note"><strong>Start with disposable data.</strong><p>The prototype does not yet confine AI agents or protect real evidence drives. It refuses <code>/Volumes</code> paths, has a restricted filesystem feature set, and queues individual callbacks rather than entire jobs.</p></aside>
+  </section>
+  <section class="get-started" id="get-started"><div class="wrap start-grid"><div><p class="eyebrow">FOR BUILDERS, TINKERERS & STORAGE PEOPLE</p><h2>Help build a calmer<br>path to storage.</h2><p>Inspect the code, reproduce the queue test, or contribute to the next milestone. The project code is GPL-2.0-or-later; the FUSE-T runtime has its own license.</p><a class="button light" href="https://github.com/AlienWeb-cloud/spindleguard">Open SpindleGuard on GitHub <span aria-hidden="true">↗</span></a></div><div class="getting-started"><h3>Try the first proof</h3><ol><li><strong>Prepare a Mac</strong><span>Apple Command Line Tools, Python 3 and FUSE-T.</span></li><li><strong>Get the project</strong><span>Clone or download the public repository to internal storage.</span></li><li><strong>Run the tests</strong><span>Build, mount disposable files and inspect the queue logs.</span></li></ol><a href="https://github.com/AlienWeb-cloud/spindleguard/blob/main/outputs/spindleguard/README.md">Read the installation guide <span aria-hidden="true">↗</span></a></div></div></section>
+</main>
+<footer class="wrap footer"><a class="brand" href="./">SpindleGuard<span class="brand-period">.</span></a><p>Protect the physical spindle.</p><div><a href="https://github.com/AlienWeb-cloud/spindleguard/blob/main/outputs/spindleguard/ARCHITECTURE.md">Architecture</a><a href="https://github.com/AlienWeb-cloud/spindleguard/blob/main/LICENSE">License</a><a href="https://github.com/AlienWeb-cloud/spindleguard/issues">Contribute ↗</a></div></footer>
+</body>
+</html>
