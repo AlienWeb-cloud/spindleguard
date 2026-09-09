@@ -1,0 +1,60 @@
+{
+  "description": "Real FUSE-T mount; two independent Python reader processes; intentional 150ms read delay. Second-file metadata queued behind first-file reads.",
+  "events": [
+    {
+      "event": "queued",
+      "op": "read",
+      "ticket": 92,
+      "time": 43332.265264,
+      "wait_ms": 0.0,
+      "pending": 0,
+      "file_tag": "8ec4e7a962e9112e"
+    },
+    {
+      "event": "start",
+      "op": "read",
+      "ticket": 92,
+      "time": 43332.265282,
+      "wait_ms": 0.018,
+      "pending": 0,
+      "file_tag": "8ec4e7a962e9112e"
+    },
+    {
+      "event": "queued",
+      "op": "metadata",
+      "ticket": 98,
+      "time": 43332.266015,
+      "wait_ms": 0.0,
+      "pending": 6,
+      "file_tag": "fdc911fa9365c36c"
+    },
+    {
+      "event": "finish",
+      "op": "read",
+      "ticket": 92,
+      "time": 43332.417836,
+      "wait_ms": 0.238,
+      "pending": 17,
+      "file_tag": "8ec4e7a962e9112e"
+    },
+    {
+      "event": "start",
+      "op": "metadata",
+      "ticket": 98,
+      "time": 43333.191949,
+      "wait_ms": 925.935,
+      "pending": 11,
+      "file_tag": "fdc911fa9365c36c"
+    },
+    {
+      "event": "finish",
+      "op": "metadata",
+      "ticket": 98,
+      "time": 43333.192186,
+      "wait_ms": 0.0,
+      "pending": 11,
+      "file_tag": "fdc911fa9365c36c"
+    }
+  ],
+  "backing_callbacks_completed": 285
+}

@@ -24,6 +24,12 @@ static unsigned slow_ms;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t ready = PTHREAD_COND_INITIALIZER;
 static unsigned long next_ticket, serving;
+static _Thread_local uint64_t file_tag;
+static uint64_t tag(const char *path) {
+    uint64_t h=14695981039346656037ULL;
+    for(const unsigned char *p=(const unsigned char *)(path?path:"");*p;++p) { h^=*p; h*=1099511628211ULL; }
+    return h;
+}
 static double now(void) {
     struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
     return t.tv_sec + t.tv_nsec / 1e9;
@@ -31,10 +37,11 @@ static double now(void) {
 /* Paths are deliberately omitted from structured logs to avoid log injection
  * and disclosure. FUSE-T may not provide the original caller's PID. */
 static void event(const char *state, const char *op, unsigned long ticket, double start) {
-    fprintf(stderr, "{\"event\":\"%s\",\"op\":\"%s\",\"ticket\":%lu,\"time\":%.6f,\"wait_ms\":%.3f,\"pending\":%lu}\n",
-        state,op,ticket,now(),(now()-start)*1000,next_ticket-serving-1);
+    fprintf(stderr, "{\"event\":\"%s\",\"op\":\"%s\",\"ticket\":%lu,\"time\":%.6f,\"wait_ms\":%.3f,\"pending\":%lu,\"file_tag\":\"%016llx\"}\n",
+        state,op,ticket,now(),(now()-start)*1000,next_ticket-serving-1,(unsigned long long)file_tag);
 }
-static unsigned long enter(const char *op) {
+static unsigned long enter(const char *op,const char *path) {
+    file_tag=tag(path);
     pthread_mutex_lock(&mutex);
     unsigned long t=next_ticket++;
     double start=now();
@@ -81,7 +88,7 @@ static int beneath(const char *path,int flags,mode_t mode) {
     }
     return fd;
 }
-#define BEGIN(op) unsigned long ticket=enter(op)
+#define BEGIN(op) unsigned long ticket=enter(op,p)
 #define END(op,res) do { int result=(res); leave(op,ticket); return result; } while(0)
 static int sg_getattr(const char *p,struct stat *st) {
     BEGIN("metadata"); int fd=beneath(p,O_RDONLY,0),r;
