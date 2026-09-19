@@ -1,2 +1,4 @@
 work/
 outputs/spindleguard/build/
+__pycache__/
+*.py[cod]

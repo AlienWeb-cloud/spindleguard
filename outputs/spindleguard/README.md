@@ -20,6 +20,10 @@ were made during development. The prototype refuses source and mount paths under
 - Read-only topology helper resolves APFS volume → physical store → whole disk.
 - A real mount test uses two separate Python client processes and checks that a
   request for the second file waits behind a deliberately delayed first-file read.
+- Identity binding (`bindcheck.assert_bound`): open a path only to get an fd,
+  verify serial / PARTUUID / FS-UUID independently, return the fd. Device-shaped
+  `open()` outside `bindcheck/` fails the control-plane suite. See
+  [BINDCHECK.md](BINDCHECK.md).
 
 See [architecture and reuse research](ARCHITECTURE.md), [upstream attribution](PROVENANCE.md)
 and [recorded proof](PROOF.md).
@@ -48,6 +52,13 @@ Build uses `/usr/local/include/fuse` and `/usr/local/lib/libfuse-t.dylib`, inclu
 its required runtime search path. If the installed package uses different paths,
 change the Makefile paths to match `fuse-t.pc`. Do not substitute Linux FUSE3
 headers: this version uses the macOS FUSE2 API.
+
+Agent-safe tests (no mounts, no host `/dev` or `/Volumes`):
+
+```sh
+SG_REQUIRE_FULL=1 make test-control
+make test-bindcheck
+```
 
 `make test` runs five topology tests, then real read/write and read-only mounts.
 It prints `ALL MOUNT TESTS PASSED` only after content comparisons, cross-process
