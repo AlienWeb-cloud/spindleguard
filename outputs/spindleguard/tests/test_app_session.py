@@ -12,9 +12,12 @@ sys.path.insert(0, str(PROJECT / "python"))
 
 from sgcontrol.policy import MARKER_NAME, PolicyError, VOLUMES_MSG, check
 from sgcontrol.session import (
+    MSG_ALREADY_BUCKETED,
     MSG_DESTROY_YES,
+    MSG_NOT_ACTIVE,
     MSG_NOT_IN_BUCKET,
     MSG_NOT_PURGED,
+    MSG_NOT_STAGED,
     bucket_session,
     create_session,
     destroy_sessions,
@@ -111,6 +114,38 @@ class SessionTests(unittest.TestCase):
             self.assertEqual(empty["sessions"], [])
             self.assertEqual(empty["bucket"], [])
             self.assertEqual(empty["purged"], [])
+
+    def test_lanes_cannot_skip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            record = create_session(parent)
+            active = Path(record["session"])
+            with self.assertRaises(PolicyError) as cm:
+                restore_session(parent, active)
+            self.assertEqual(str(cm.exception), MSG_NOT_STAGED)
+            with self.assertRaises(PolicyError) as cm:
+                destroy_sessions(parent, active, yes=True)
+            self.assertEqual(str(cm.exception), MSG_NOT_PURGED)
+            self.assertTrue(active.is_dir())
+            bucketed = Path(bucket_session(parent, active)["session"])
+            with self.assertRaises(PolicyError) as cm:
+                bucket_session(parent, bucketed)
+            self.assertEqual(str(cm.exception), MSG_ALREADY_BUCKETED)
+            purged = Path(purge_sessions(parent, bucketed)["session"])
+            self.assertTrue((purged / "source" / MARKER_NAME).is_file())
+            with self.assertRaises(PolicyError) as cm:
+                bucket_session(parent, purged)
+            self.assertEqual(str(cm.exception), MSG_NOT_ACTIVE)
+            with self.assertRaises(PolicyError) as cm:
+                purge_sessions(parent, purged)
+            self.assertEqual(str(cm.exception), MSG_NOT_IN_BUCKET)
+            self.assertTrue(purged.is_dir())
+            listed = list_sessions(parent)
+            self.assertEqual(listed["sessions"], [])
+            self.assertEqual(listed["bucket"], [])
+            self.assertEqual(len(listed["purged"]), 1)
+            loaded = load_session(purged / "session.json")
+            self.assertIn(f"/{loaded['lane']}/", loaded["source"].replace("\\", "/"))
 
     def test_refuses_volumes_parent(self):
         with self.assertRaises(PolicyError):

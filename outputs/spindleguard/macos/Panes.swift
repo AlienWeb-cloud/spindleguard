@@ -100,10 +100,12 @@ struct BrokerPane: View {
                     Button(state.running ? "Stop" : "Start") {
                         state.running ? state.stop() : state.start()
                     }
+                    .disabled(!state.running && (state.sessionBucketed || state.sessionPurged))
                     Button("Unmount") { state.unmountOnly() }
                         .disabled(state.mount.isEmpty)
                     Button("Policy check") { state.policyCheck() }
                     Button("Preview start") { state.previewStart() }
+                        .disabled(state.sessionBucketed || state.sessionPurged)
                 }
                 .disabled(state.busy)
                 Form {
@@ -346,6 +348,7 @@ struct RetainPane: View {
                 StatusBanner()
             }
         }
+        .onAppear { state.listSessions() }
     }
 
     private func listBlock<Actions: View>(

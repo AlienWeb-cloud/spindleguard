@@ -46,7 +46,10 @@ struct ContentView: View {
                     state.running ? state.stop() : state.start()
                 }
                 .keyboardShortcut(state.running ? "." : "r", modifiers: [.command])
-                .disabled(state.busy && !state.running)
+                .disabled(
+                    (state.busy && !state.running)
+                        || (!state.running && (state.sessionBucketed || state.sessionPurged))
+                )
                 Button("Open Mount", action: state.openMount)
                     .disabled(state.mount.isEmpty)
                 Button("Probe Queue", action: state.probeQueue)

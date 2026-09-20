@@ -367,6 +367,10 @@ final class AppState: ObservableObject {
             return
         }
         let parent = sessionParent()
+        if let err = PathPolicy.forbidden(parent) ?? PathPolicy.forbidden(row.session) {
+            error = err
+            return
+        }
         runSG(arguments: ["session-purge", "--session", row.session, "--parent", parent, "--json"]) { data in
             self.status = "Moved to the purged list. Restore to the bucket, or destroy to delete files."
             self.applyMoved(data, fallback: row.session)
@@ -383,6 +387,10 @@ final class AppState: ObservableObject {
             return
         }
         let parent = sessionParent()
+        if let err = PathPolicy.forbidden(parent) {
+            error = err
+            return
+        }
         runSG(arguments: ["session-purge", "--all", "--parent", parent, "--json"]) { data in
             if let obj = data as? [String: Any], let count = obj["count"] as? Int {
                 self.status = "Moved \(count) session(s) from the bucket to the purged list."
@@ -415,6 +423,10 @@ final class AppState: ObservableObject {
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let parent = sessionParent()
+        if let err = PathPolicy.forbidden(parent) ?? PathPolicy.forbidden(row.session) {
+            error = err
+            return
+        }
         runSG(arguments: ["session-destroy", "--session", row.session, "--parent", parent, "--yes", "--json"]) { _ in
             self.status = "Destroyed from the purged list."
             self.clearIfCurrent(session: row.session)
@@ -437,6 +449,10 @@ final class AppState: ObservableObject {
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let parent = sessionParent()
+        if let err = PathPolicy.forbidden(parent) {
+            error = err
+            return
+        }
         runSG(arguments: ["session-destroy", "--all", "--parent", parent, "--yes", "--json"]) { data in
             if let obj = data as? [String: Any], let count = obj["count"] as? Int {
                 self.status = "Destroyed \(count) session(s) from the purged list."
@@ -685,6 +701,12 @@ final class AppState: ObservableObject {
     }
 
     func previewStart() {
+        error = ""
+        if sessionBucketed || sessionPurged {
+            error = "Restore this session to Active before starting."
+            pane = .retain
+            return
+        }
         var args = [
             "start", "--dry-run", "--json",
             "--source", source,

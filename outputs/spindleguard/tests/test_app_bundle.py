@@ -84,6 +84,7 @@ class AppBundleTests(unittest.TestCase):
         panes = (MACOS / "Panes.swift").read_text(encoding="utf-8")
         self.assertIn("struct SetupPane", panes)
         self.assertIn("struct RetainPane", panes)
+        self.assertIn("onAppear { state.listSessions() }", panes)
         self.assertIn('listBlock("Active"', panes)
         self.assertIn('listBlock("Bucket"', panes)
         self.assertIn('listBlock("Purged"', panes)

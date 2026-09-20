@@ -37,7 +37,7 @@ struct SpindleGuardApp: App {
             CommandMenu("Broker") {
                 Button("Start") { state.start() }
                     .keyboardShortcut("r", modifiers: [.command])
-                    .disabled(state.running)
+                    .disabled(state.running || state.sessionBucketed || state.sessionPurged)
                 Button("Stop") { state.stop() }
                     .keyboardShortcut(".", modifiers: [.command])
                     .disabled(!state.running)
@@ -45,6 +45,7 @@ struct SpindleGuardApp: App {
                     .disabled(state.mount.isEmpty)
                 Button("Policy Check") { state.policyCheck() }
                 Button("Preview Start") { state.previewStart() }
+                    .disabled(state.sessionBucketed || state.sessionPurged)
                 Divider()
                 Button("Open Mount in Finder") { state.openMount() }
                     .disabled(state.mount.isEmpty)
@@ -128,7 +129,7 @@ struct SpindleGuardApp: App {
                     state.revealPane(.broker)
                     state.start()
                 }
-                .disabled(state.running)
+                .disabled(state.running || state.sessionBucketed || state.sessionPurged)
                 Button("Stop") { state.stop() }
                     .disabled(!state.running)
                 Button("Unmount") { state.unmountOnly() }
@@ -141,6 +142,7 @@ struct SpindleGuardApp: App {
                     state.revealPane(.broker)
                     state.previewStart()
                 }
+                .disabled(state.sessionBucketed || state.sessionPurged)
                 Button("Open Mount in Finder") { state.openMount() }
                     .disabled(state.mount.isEmpty)
                 Button("Open Source in Finder") { state.openSource() }

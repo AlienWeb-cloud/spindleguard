@@ -561,6 +561,11 @@ async function policyCheck(){
   $("policyJSON").textContent = JSON.stringify(body && body.data, null, 2);
 }
 async function previewStart(){
+  if(state.bucketed || state.purged){
+    setStatus("Restore this session to Active before starting.");
+    showPane("retain");
+    return;
+  }
   const body = await run(["start","--dry-run","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start");
   $("policyJSON").textContent = JSON.stringify(body && body.data, null, 2);
 }
@@ -592,7 +597,10 @@ function extra(action){
   if(action === "purge-bucket"){ purgeBucket(); return; }
   if(action === "empty-purged"){ destroyPurged(); return; }
   if(action === "session-parent"){ showPane("setup"); setStatus("Session parent is shown on Setup. Preview does not open Finder."); return; }
-  if(action === "start"){ showPane("broker"); run(["start","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start"); return; }
+  if(action === "start"){
+    if(state.bucketed || state.purged){ showPane("retain"); setStatus("Restore this session to Active before starting."); return; }
+    showPane("broker"); run(["start","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start"); return;
+  }
   if(action === "stop"){ setStatus("Stop is native-only. Preview does not mount."); return; }
   if(action === "unmount"){ showPane("broker"); run(["unmount","--mount",$("mount").value,"--json"], "start"); return; }
   if(action === "policy"){ policyCheck(); return; }

@@ -430,7 +430,7 @@ def build_parser() -> argparse.ArgumentParser:
     ls.add_argument("--json", action="store_true")
     ls.set_defaults(func=cmd_session_list)
 
-    sb = sub.add_parser("session-bucket", help="move an active session into the deletion bucket")
+    sb = sub.add_parser("session-bucket", help="move an active session into the bucket")
     sb.add_argument("--session", help="ui-session directory or session.json")
     sb.add_argument("--parent", help="session parent (inferred from --session when omitted)")
     sb.add_argument("--json", action="store_true")
