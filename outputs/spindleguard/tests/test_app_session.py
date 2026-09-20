@@ -10,7 +10,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT / "python"))
 
-from sgcontrol.policy import MARKER_NAME, PolicyError, check
+from sgcontrol.policy import MARKER_NAME, PolicyError, VOLUMES_MSG, check
 from sgcontrol.session import create_session, load_session
 
 
@@ -34,6 +34,11 @@ class SessionTests(unittest.TestCase):
     def test_refuses_volumes_parent(self):
         with self.assertRaises(PolicyError):
             create_session(Path("/Volumes/exhibit"))
+
+    def test_load_session_refuses_volumes_file(self):
+        with self.assertRaises(PolicyError) as cm:
+            load_session(Path("/Volumes/exhibit/session.json"))
+        self.assertEqual(str(cm.exception), VOLUMES_MSG)
 
 
 if __name__ == "__main__":

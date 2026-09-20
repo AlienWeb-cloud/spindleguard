@@ -79,7 +79,7 @@ final class BrokerService {
         stderr = pipe
     }
 
-    func stop(mount: String) {
+    func unmount(mount: String) {
         if !mount.isEmpty, PathPolicy.forbidden(mount) == nil {
             let umount = Process()
             umount.executableURL = URL(fileURLWithPath: "/sbin/umount")
@@ -87,6 +87,10 @@ final class BrokerService {
             try? umount.run()
             umount.waitUntilExit()
         }
+    }
+
+    func stop(mount: String) {
+        unmount(mount: mount)
         process?.terminate()
         process?.waitUntilExit()
         stderr?.fileHandleForReading.readabilityHandler = nil

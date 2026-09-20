@@ -3,11 +3,15 @@
 """SpindleGuard control CLI. Non-interactive. Does not delete files.
 
 Examples:
-  ./sg --help
+  ./sg setup --dry-run --json
+  ./sg setup
+  ./sg verify --quick
   ./sg doctor --json
   ./sg session-create --parent ./work --json
+  ./sg session-load --file DIR/session.json --json
   ./sg policy-check --source DIR --mount DIR --write-prefix /Workspace --json
   ./sg start --dry-run --source DIR --mount DIR --write-prefix /Workspace --delay-ms 150 --json
+  ./sg unmount --mount DIR --dry-run
   ./sg scan --root . --json
   ./sg bind --manifest FILE --path PATH --fixture FILE
   ./sg topology --path DIR
@@ -29,10 +33,12 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "python"))
 
 from sgcontrol.broker import broker_command
-from sgcontrol.doctor import doctor
+from sgcontrol.doctor import FUSE_INSTALL, doctor
 from sgcontrol.events import competing_wait, load_events, queue_snapshot
-from sgcontrol.policy import PolicyError, check
+from sgcontrol.policy import PolicyError, check, check_observe_path
 from sgcontrol.session import create_session, default_parent, load_session
+from sgcontrol.setup import setup
+from sgcontrol.verify import verify_full, verify_quick
 
 
 def _out(data: Any, as_json: bool) -> None:
@@ -55,6 +61,21 @@ def cmd_session_create(args: argparse.Namespace) -> int:
     except (PolicyError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         print("  ./sg session-create --parent ./work --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_load(args: argparse.Namespace) -> int:
+    if not args.file:
+        print("Error: --file is required.", file=sys.stderr)
+        print("  ./sg session-load --file DIR/session.json --json", file=sys.stderr)
+        return 2
+    try:
+        record = load_session(Path(args.file))
+    except (PolicyError, OSError, json.JSONDecodeError, KeyError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-load --file DIR/session.json --json", file=sys.stderr)
         return 2
     _out(record, True)
     return 0
@@ -188,24 +209,77 @@ def cmd_probe_log(args: argparse.Namespace) -> int:
     return 0 if evidence else 1
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    try:
+        report = setup(
+            ROOT,
+            dry_run=args.dry_run,
+            install_fuse=args.install_fuse,
+            yes=args.yes,
+            create_session_flag=args.create_session,
+            session_parent=Path(args.parent) if args.parent else None,
+        )
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg setup --dry-run --json", file=sys.stderr)
+        print(f"  {FUSE_INSTALL}", file=sys.stderr)
+        return 2
+    _out(report, True)
+    if args.strict and (report["errors"] or (not report["can_mount"] and sys.platform == "darwin")):
+        return 2
+    return 0 if not report["errors"] else 2
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    payload = verify_full(ROOT) if args.full else verify_quick(ROOT)
+    _out(payload, True)
+    return 0 if payload["ok"] else 1
+
+
+def cmd_unmount(args: argparse.Namespace) -> int:
+    if not args.mount:
+        print("Error: --mount is required.", file=sys.stderr)
+        print("  ./sg unmount --mount DIR", file=sys.stderr)
+        return 2
+    try:
+        check_observe_path(args.mount)
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    cmd = ["/sbin/umount", args.mount]
+    if args.dry_run:
+        _out({"dry_run": True, "cmd": cmd}, True)
+        return 0
+    if sys.platform != "darwin":
+        print("Error: unmount requires macOS.", file=sys.stderr)
+        print("  ./sg unmount --mount DIR --dry-run", file=sys.stderr)
+        return 2
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error: {result.stderr.strip() or 'umount failed'}", file=sys.stderr)
+        return result.returncode
+    _out({"ok": True, "mount": args.mount}, True)
+    return 0
+
+
 def cmd_app(args: argparse.Namespace) -> int:
     bundle = ROOT / "SpindleGuard.app"
     payload = {
         "bundle": str(bundle),
         "exists": bundle.is_dir(),
         "darwin": sys.platform == "darwin",
-        "hint": "make app && open SpindleGuard.app",
+        "hint": "./sg setup && open SpindleGuard.app",
     }
     if args.dry_run:
         _out(payload, True)
         return 0 if payload["exists"] or not payload["darwin"] else 1
     if sys.platform != "darwin":
         print("Error: native app requires macOS.", file=sys.stderr)
-        print("  make app", file=sys.stderr)
+        print("  ./sg setup", file=sys.stderr)
         return 2
     if not bundle.is_dir():
         print("Error: SpindleGuard.app is not built.", file=sys.stderr)
-        print("  make app && ./sg app", file=sys.stderr)
+        print("  ./sg setup && ./sg app", file=sys.stderr)
         return 2
     result = subprocess.run(["/usr/bin/open", str(bundle)])
     return result.returncode
@@ -227,6 +301,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--parent", help="parent directory (default: <project>/work)")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_session_create)
+
+    sl = sub.add_parser("session-load", help="load a retained session.json (never deletes)")
+    sl.add_argument("--file", help="path to session.json")
+    sl.add_argument("--json", action="store_true")
+    sl.set_defaults(func=cmd_session_load)
 
     p = sub.add_parser("policy-check", help="refuse /Volumes, /dev, nested, unmarked trees")
     p.add_argument("--source")
@@ -280,6 +359,28 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--dry-run", action="store_true")
     a.set_defaults(func=cmd_app)
 
+    st = sub.add_parser("setup", help="check deps, optionally install FUSE-T, build broker and app")
+    st.add_argument("--dry-run", action="store_true")
+    st.add_argument("--install-fuse", action="store_true", help="run brew install; requires --yes")
+    st.add_argument("--yes", action="store_true", help="confirm --install-fuse")
+    st.add_argument("--create-session", action="store_true", help="also create a disposable session")
+    st.add_argument("--parent", help="session parent when using --create-session")
+    st.add_argument("--strict", action="store_true", help="exit 2 unless this Mac can mount")
+    st.add_argument("--json", action="store_true")
+    st.set_defaults(func=cmd_setup)
+
+    v = sub.add_parser("verify", help="verify CLI, policy, scan, bind; --full also runs control tests")
+    v.add_argument("--quick", action="store_true", help="skip unittest suite (default)")
+    v.add_argument("--full", action="store_true", help="also run test-control and test-bindcheck")
+    v.add_argument("--json", action="store_true")
+    v.set_defaults(func=cmd_verify)
+
+    u = sub.add_parser("unmount", help="unmount a mountpoint; refuses /Volumes and /dev")
+    u.add_argument("--mount")
+    u.add_argument("--dry-run", action="store_true")
+    u.add_argument("--json", action="store_true")
+    u.set_defaults(func=cmd_unmount)
+
     return parser
 
 
@@ -289,7 +390,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.command:
         parser.print_help(sys.stderr)
         print("Error: a subcommand is required.", file=sys.stderr)
-        print("  ./sg doctor --json", file=sys.stderr)
+        print("  ./sg setup --dry-run --json", file=sys.stderr)
         return 2
     return args.func(args)
 

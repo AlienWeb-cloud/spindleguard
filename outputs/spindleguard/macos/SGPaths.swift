@@ -31,6 +31,10 @@ enum SGPaths {
         if FileManager.default.isExecutableFile(atPath: built.path) {
             return built
         }
+        let bundledApp = root.appendingPathComponent("SpindleGuard.app/Contents/Helpers/spindleguard")
+        if FileManager.default.isExecutableFile(atPath: bundledApp.path) {
+            return bundledApp
+        }
         return Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/spindleguard")
     }
 
@@ -48,6 +52,29 @@ enum SGPaths {
             return path
         }
         return "/usr/bin/python3"
+    }
+
+    /// Writable session parent. Prefers `<project>/work`; if the bundle
+    /// resources are not writable, uses Application Support. Never /Volumes.
+    static func sessionParent() -> URL {
+        if let env = ProcessInfo.processInfo.environment["SPINDLEGUARD_SESSION_PARENT"], !env.isEmpty {
+            return URL(fileURLWithPath: env)
+        }
+        let work = projectRoot().appendingPathComponent("work")
+        let marker = work.appendingPathComponent(".spindleguard-session-parent")
+        do {
+            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: marker.path) {
+                try "retained session parent\n".write(to: marker, atomically: true, encoding: .utf8)
+            }
+            return work
+        } catch {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+            let parent = base.appendingPathComponent("SpindleGuard/sessions", isDirectory: true)
+            try? FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+            return parent
+        }
     }
 
     static func exampleManifest() -> URL {

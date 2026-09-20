@@ -16,7 +16,7 @@ SWIFT_SRC = \
 	macos/ContentView.swift \
 	macos/Panes.swift
 
-.PHONY: all test test-control test-bindcheck app
+.PHONY: all test test-control test-bindcheck app setup verify verify-full
 
 all: build/spindleguard
 
@@ -36,27 +36,41 @@ test-control:
 test-bindcheck:
 	python3 -B tests/run_bindcheck_mutations.py
 
-# Native SwiftUI bundle. Overwrites bundle files in place; does not delete the tree.
+setup:
+	python3 -B ./sg setup --json
+
+verify:
+	python3 -B ./sg verify --quick --json
+
+verify-full:
+	python3 -B ./sg verify --full --json
+
+# Native SwiftUI bundle. Does not require FUSE-T so Doctor/Setup can open first.
+# Overwrites bundle files in place; does not delete the tree.
 ifeq ($(UNAME_S),Darwin)
 ifeq ($(UNAME_M),arm64)
 APP_TARGET = arm64-apple-macos13.0
 else
 APP_TARGET = x86_64-apple-macos13.0
 endif
-app: all
+app:
 	mkdir -p $(APP_MACOS) $(APP_RES) $(APP_HELP) $(APP_RES)/macos/Resources $(APP_RES)/bindcheck $(APP_RES)/python/sgcontrol $(APP_RES)/tools
 	xcrun swiftc -parse-as-library -O \
 		-sdk $$(xcrun --sdk macosx --show-sdk-path) \
 		-target $(APP_TARGET) \
-		-framework SwiftUI -framework AppKit -framework Combine \
+		-framework SwiftUI -framework AppKit -framework Combine -framework UniformTypeIdentifiers \
 		-o $(APP_MACOS)/SpindleGuard \
 		$(SWIFT_SRC)
 	cp macos/Info.plist $(APP)/Contents/Info.plist
 	printf 'APPL????' > $(APP)/Contents/PkgInfo
 	cp sg $(APP_RES)/sg
 	chmod +x $(APP_RES)/sg $(APP_MACOS)/SpindleGuard
-	cp build/spindleguard $(APP_HELP)/spindleguard
-	chmod +x $(APP_HELP)/spindleguard
+	if [ -x build/spindleguard ]; then \
+		cp build/spindleguard $(APP_HELP)/spindleguard; \
+		chmod +x $(APP_HELP)/spindleguard; \
+	else \
+		echo "Note: broker helper not built yet (need FUSE-T). UI still opens; use Setup."; \
+	fi
 	cp -R bindcheck/*.py $(APP_RES)/bindcheck/
 	cp -R python/sgcontrol/*.py $(APP_RES)/python/sgcontrol/
 	cp python/__init__.py $(APP_RES)/python/__init__.py
@@ -67,6 +81,7 @@ app: all
 	@echo "Built $(APP)"
 	@echo "  open $(APP)"
 	@echo "  ./sg app"
+	@echo "  ./sg setup"
 else
 app:
 	@echo "Error: make app requires macOS (native SwiftUI bundle)."

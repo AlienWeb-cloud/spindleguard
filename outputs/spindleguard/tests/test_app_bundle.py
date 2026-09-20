@@ -39,6 +39,7 @@ class AppBundleTests(unittest.TestCase):
             "func start()",
             "func stop()",
             "func newSession()",
+            "func loadSession()",
             "func probeQueue()",
             "func scanTree()",
             "func bindIdentity()",
@@ -46,21 +47,52 @@ class AppBundleTests(unittest.TestCase):
             "func runTopology()",
             "func refreshDoctor()",
             "func openMount()",
+            "func previewSetup()",
+            "func runSetup()",
+            "func installFuse()",
+            "func verifyInstall()",
+            "func unmountOnly()",
+            "func policyCheck()",
+            "func previewStart()",
+            "func copyFuseCommand()",
+            "func openFuseDocs()",
+            "func revealLog()",
         ):
             self.assertIn(needle, state)
+        self.assertIn('["setup", "--json"]', state)
+        self.assertIn('["setup", "--dry-run", "--json"]', state)
+        self.assertNotIn(
+            'runSG(arguments: ["setup", "--dry-run", "--json"])',
+            state.split("func runSetup")[1][:400] if "func runSetup" in state else "",
+        )
         panes = (MACOS / "Panes.swift").read_text(encoding="utf-8")
+        self.assertIn("struct SetupPane", panes)
+        self.assertIn("Run setup", panes)
+        self.assertIn("Verify install", panes)
+        self.assertIn("Copy FUSE-T command", panes)
         self.assertIn("Bind identity", panes)
         self.assertIn("Resolve source topology", panes)
         self.assertIn("Probe concurrent reads", panes)
+        self.assertIn("Policy check", panes)
+        self.assertIn("Preview start", panes)
+        content = (MACOS / "ContentView.swift").read_text(encoding="utf-8")
+        self.assertIn("case .setup: SetupPane()", content)
+        self.assertIn('Button("Verify Install"', content)
         app = (MACOS / "SpindleGuardApp.swift").read_text(encoding="utf-8")
         self.assertIn('Button("Start")', app)
         self.assertIn('Button("Stop")', app)
+        self.assertIn('CommandMenu("Setup")', app)
+        self.assertIn("import UniformTypeIdentifiers", state)
+        self.assertIn("sessionParent()", (MACOS / "SGPaths.swift").read_text(encoding="utf-8"))
+        self.assertIn("func unmount(mount: String)", (MACOS / "BrokerService.swift").read_text(encoding="utf-8"))
 
     def test_info_plist(self):
         info = plistlib.loads((MACOS / "Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "cloud.alienweb.spindleguard")
         self.assertEqual(info["CFBundleExecutable"], "SpindleGuard")
         self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
+        self.assertEqual(info["CFBundleShortVersionString"], "0.4")
+        self.assertEqual(info["CFBundleVersion"], "4")
         self.assertFalse(info["NSSupportsAutomaticTermination"])
 
     def test_make_app_requires_macos(self):
@@ -83,6 +115,12 @@ class AppBundleTests(unittest.TestCase):
         makefile = (PROJECT / "Makefile").read_text(encoding="utf-8")
         self.assertNotIn("rm -rf $(APP)", makefile)
         self.assertNotIn("rm -rf SpindleGuard.app", makefile)
+        self.assertNotIn("app: all", makefile)
+        self.assertIn("UniformTypeIdentifiers", makefile)
+        self.assertIn("python3 -B ./sg setup", makefile)
+        self.assertIn("python3 -B ./sg verify --quick", makefile)
+        self.assertIn("verify --full", makefile)
+        self.assertIn("broker helper not built yet", makefile)
 
 
 if __name__ == "__main__":

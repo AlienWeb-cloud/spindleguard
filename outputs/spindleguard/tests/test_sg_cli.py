@@ -30,11 +30,15 @@ class SgCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("doctor", result.stdout)
         self.assertIn("session-create", result.stdout)
+        self.assertIn("session-load", result.stdout)
+        self.assertIn("setup", result.stdout)
+        self.assertIn("verify", result.stdout)
+        self.assertIn("unmount", result.stdout)
 
     def test_missing_subcommand_example(self):
         result = run_sg()
         self.assertEqual(result.returncode, 2)
-        self.assertIn("./sg doctor --json", result.stderr)
+        self.assertIn("./sg setup --dry-run --json", result.stderr)
 
     def test_doctor_json(self):
         result = run_sg("doctor", "--json")
@@ -42,6 +46,10 @@ class SgCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertIn("can_mount", payload)
         self.assertIn("problems", payload)
+        self.assertIn("checks", payload)
+        self.assertIn("next", payload)
+        self.assertIn("fuse_install", payload)
+        self.assertTrue(payload["ready_for_ui"])
         self.assertFalse(payload["can_mount"])
 
     def test_session_create_and_policy(self):
@@ -147,7 +155,7 @@ class SgCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertFalse(payload["darwin"])
-        self.assertIn("make app", payload["hint"])
+        self.assertIn("sg setup", payload["hint"])
 
     def test_start_without_source_example(self):
         result = run_sg("start")

@@ -2,10 +2,19 @@
 import AppKit
 import Combine
 import Foundation
+import UniformTypeIdentifiers
+
+struct SetupCheck: Identifiable, Hashable {
+    let id: String
+    let ok: Bool
+    let label: String
+    let fix: String
+}
 
 @MainActor
 final class AppState: ObservableObject {
     enum Pane: String, CaseIterable, Identifiable, Hashable {
+        case setup = "Setup"
         case broker = "Broker"
         case queue = "Queue"
         case identity = "Identity"
@@ -14,15 +23,18 @@ final class AppState: ObservableObject {
         var id: String { rawValue }
     }
 
-    @Published var pane: Pane = .broker
+    @Published var pane: Pane = .setup
     @Published var source: String = ""
     @Published var mount: String = ""
     @Published var logPath: String = ""
+    @Published var sessionRoot: String = ""
+    @Published var sessionParentPath: String = ""
     @Published var writePrefix: String = "/Workspace"
     @Published var writable: Bool = true
     @Published var delayMs: Double = 150
     @Published var running: Bool = false
-    @Published var status: String = "Create a disposable session, then start the broker."
+    @Published var busy: Bool = false
+    @Published var status: String = "Run Setup, then create a disposable session."
     @Published var error: String = ""
     @Published var events: [BrokerEvent] = []
     @Published var retainedLog: String = ""
@@ -31,6 +43,10 @@ final class AppState: ObservableObject {
     @Published var bindJSON: String = ""
     @Published var topologyJSON: String = ""
     @Published var probeJSON: String = ""
+    @Published var setupJSON: String = ""
+    @Published var policyJSON: String = ""
+    @Published var startPreviewJSON: String = ""
+    @Published var verifyJSON: String = ""
     @Published var identityManifest: String = ""
     @Published var identityFixture: String = ""
     @Published var identityPath: String = "/dev/sda1"
@@ -45,13 +61,20 @@ final class AppState: ObservableObject {
     @Published var activeOp: String = "idle"
     @Published var fuseReady: Bool = false
     @Published var canMount: Bool = false
+    @Published var canBuildApp: Bool = false
+    @Published var fuseInstall: String = "brew install macos-fuse-t/homebrew-cask/fuse-t"
+    @Published var fuseDocs: String = "https://github.com/macos-fuse-t/fuse-t"
+    @Published var nextActions: [String] = []
+    @Published var checks: [SetupCheck] = []
 
     private let broker = BrokerService()
     private var lineBuffer = ""
+    private var sgTicket = 0
 
     init() {
         identityManifest = SGPaths.exampleManifest().path
         identityFixture = SGPaths.exampleFixture().path
+        sessionParentPath = SGPaths.sessionParent().path
         broker.onLine = { [weak self] chunk in
             Task { @MainActor in
                 self?.ingest(chunk)
@@ -88,6 +111,43 @@ final class AppState: ObservableObject {
         panel.canCreateDirectories = true
         panel.message = title
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+        beginPanel(panel, setter: setter)
+    }
+
+    func chooseJSONFile(title: String, setter: @escaping (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.message = title
+        beginPanel(panel, setter: setter)
+    }
+
+    func chooseSaveJSON(title: String, setter: @escaping (String) -> Void) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.message = title
+        panel.nameFieldStringValue = "manifest.generation-2.json"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in
+                if FileManager.default.fileExists(atPath: url.path) {
+                    self.error = "refuses to overwrite existing manifest path"
+                    return
+                }
+                if let err = PathPolicy.forbidden(url.path) {
+                    self.error = err
+                    return
+                }
+                setter(url.path)
+                self.error = ""
+            }
+        }
+    }
+
+    private func beginPanel(_ panel: NSOpenPanel, setter: @escaping (String) -> Void) {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in
@@ -103,12 +163,15 @@ final class AppState: ObservableObject {
 
     func newSession() {
         error = ""
-        runSG(arguments: ["session-create", "--parent", SGPaths.projectRoot().appendingPathComponent("work").path, "--json"]) { data in
+        let parent = sessionParentPath.isEmpty ? SGPaths.sessionParent().path : sessionParentPath
+        if let err = PathPolicy.forbidden(parent) {
+            error = err
+            pane = .setup
+            return
+        }
+        runSG(arguments: ["session-create", "--parent", parent, "--json"]) { data in
             guard let obj = data as? [String: Any] else { return }
-            self.source = obj["source"] as? String ?? ""
-            self.mount = obj["mount"] as? String ?? ""
-            self.logPath = obj["log"] as? String ?? ""
-            self.writePrefix = obj["write_prefix"] as? String ?? "/Workspace"
+            self.applySession(obj)
             self.status = "Session retained at \(obj["session"] as? String ?? ""). Files are not deleted."
             self.events = []
             self.retainedLog = ""
@@ -116,15 +179,28 @@ final class AppState: ObservableObject {
         }
     }
 
+    func loadSession() {
+        error = ""
+        chooseJSONFile(title: "Load session.json") { path in
+            self.runSG(arguments: ["session-load", "--file", path, "--json"]) { data in
+                guard let obj = data as? [String: Any] else { return }
+                self.applySession(obj)
+                self.status = "Loaded retained session."
+                self.pane = .broker
+            }
+        }
+    }
+
     func start() {
         error = ""
         if let problem = policyProblem {
             error = problem
+            pane = .broker
             return
         }
         if !canMount {
-            error = "This Mac cannot mount yet. See Doctor (FUSE-T + make)."
-            pane = .doctor
+            error = "This Mac cannot mount yet. Finish Setup (FUSE-T + broker)."
+            pane = .setup
             return
         }
         do {
@@ -137,6 +213,7 @@ final class AppState: ObservableObject {
             )
             running = true
             status = "Broker starting. Open the mount in Finder when it appears."
+            pane = .queue
         } catch {
             self.error = error.localizedDescription
         }
@@ -147,6 +224,19 @@ final class AppState: ObservableObject {
         running = false
         activeOp = "idle"
         status = "Stop requested. Mount should unmount; session files are retained."
+    }
+
+    func unmountOnly() {
+        error = ""
+        if mount.isEmpty {
+            error = "Mount path is required."
+            pane = .broker
+            return
+        }
+        runSG(arguments: ["unmount", "--mount", mount, "--json"]) { data in
+            self.status = "Unmount requested."
+            self.policyJSON = self.pretty(data)
+        }
     }
 
     func openMount() {
@@ -163,6 +253,20 @@ final class AppState: ObservableObject {
             return
         }
         NSWorkspace.shared.open(URL(fileURLWithPath: source))
+    }
+
+    func revealLog() {
+        guard !logPath.isEmpty, PathPolicy.forbidden(logPath) == nil else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: logPath)])
+    }
+
+    func openSessionParent() {
+        let parent = sessionParentPath.isEmpty ? SGPaths.sessionParent().path : sessionParentPath
+        guard PathPolicy.forbidden(parent) == nil else {
+            error = PathPolicy.volumesMessage
+            return
+        }
+        NSWorkspace.shared.open(URL(fileURLWithPath: parent))
     }
 
     func probeQueue() {
@@ -193,11 +297,110 @@ final class AppState: ObservableObject {
 
     func refreshDoctor() {
         runSG(arguments: ["doctor", "--json"]) { data in
-            if let obj = data as? [String: Any] {
-                self.canMount = obj["can_mount"] as? Bool ?? false
-                self.fuseReady = obj["fuse_t_dylib"] as? Bool ?? false
-            }
+            self.applyDoctor(data)
             self.doctorJSON = self.pretty(data)
+        }
+    }
+
+    func previewSetup() {
+        error = ""
+        runSG(arguments: ["setup", "--dry-run", "--json"]) { data in
+            self.setupJSON = self.pretty(data)
+            self.status = "Setup preview only. Run Setup to build on this Mac."
+            self.refreshDoctor()
+        }
+    }
+
+    func runSetup() {
+        error = ""
+        runSG(arguments: ["setup", "--json"]) { data in
+            self.setupJSON = self.pretty(data)
+            if let obj = data as? [String: Any] {
+                let ok = obj["ok"] as? Bool ?? false
+                self.status = ok
+                    ? "Setup finished. Create a session if the broker is ready."
+                    : "Setup reported problems. See the JSON below."
+            } else {
+                self.status = "Setup finished."
+            }
+            self.refreshDoctor()
+        }
+    }
+
+    func installFuse() {
+        error = ""
+        let alert = NSAlert()
+        alert.messageText = "Install FUSE-T with Homebrew?"
+        alert.informativeText = """
+        \(fuseInstall)
+
+        This is a system package with a separate license. SpindleGuard will not install it unless you confirm. Official docs: \(fuseDocs)
+        """
+        alert.addButton(withTitle: "Install")
+        alert.addButton(withTitle: "Copy command")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            runSG(arguments: ["setup", "--install-fuse", "--yes", "--json"]) { data in
+                self.setupJSON = self.pretty(data)
+                self.status = "FUSE-T install finished. Run Setup to build the broker."
+                self.refreshDoctor()
+            }
+        case .alertSecondButtonReturn:
+            copyFuseCommand()
+        default:
+            break
+        }
+    }
+
+    func copyFuseCommand() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(fuseInstall, forType: .string)
+        status = "Copied: \(fuseInstall)"
+    }
+
+    func openFuseDocs() {
+        guard let url = URL(string: fuseDocs) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func policyCheck() {
+        var args = ["policy-check", "--source", source, "--mount", mount, "--json"]
+        if writable {
+            args += ["--write-prefix", writePrefix]
+        }
+        runSG(arguments: args) { data in
+            self.policyJSON = self.pretty(data)
+            self.status = "Policy check finished."
+        }
+    }
+
+    func previewStart() {
+        var args = [
+            "start", "--dry-run", "--json",
+            "--source", source,
+            "--mount", mount,
+            "--delay-ms", String(Int(delayMs)),
+            "--binary", SGPaths.brokerBinary().path,
+        ]
+        if writable {
+            args += ["--write-prefix", writePrefix]
+        }
+        runSG(arguments: args) { data in
+            self.startPreviewJSON = self.pretty(data)
+            self.status = "Start preview (no mount)."
+        }
+    }
+
+    func verifyInstall() {
+        error = ""
+        runSG(arguments: ["verify", "--quick", "--json"]) { data in
+            self.verifyJSON = self.pretty(data)
+            if let obj = data as? [String: Any], let ok = obj["ok"] as? Bool {
+                self.status = ok ? "Install verification passed." : "Install verification found failures."
+            } else {
+                self.status = "Install verification finished."
+            }
         }
     }
 
@@ -209,8 +412,8 @@ final class AppState: ObservableObject {
     }
 
     func bindIdentity() {
-        if let err = PathPolicy.forbidden(identityPath), identityPath.hasPrefix("/Volumes") {
-            error = err
+        if identityPath.hasPrefix("/Volumes") {
+            error = PathPolicy.volumesMessage
             return
         }
         runSG(arguments: [
@@ -264,11 +467,41 @@ final class AppState: ObservableObject {
         status = "Loaded failing-media example. Fingerprint should be skipped."
     }
 
+    private func applySession(_ obj: [String: Any]) {
+        source = obj["source"] as? String ?? ""
+        mount = obj["mount"] as? String ?? ""
+        logPath = obj["log"] as? String ?? ""
+        sessionRoot = obj["session"] as? String ?? ""
+        writePrefix = obj["write_prefix"] as? String ?? "/Workspace"
+        error = ""
+    }
+
+    private func applyDoctor(_ data: Any) {
+        guard let obj = data as? [String: Any] else { return }
+        canMount = obj["can_mount"] as? Bool ?? false
+        canBuildApp = obj["can_build_app"] as? Bool ?? false
+        fuseReady = obj["fuse_t_dylib"] as? Bool ?? false
+        fuseInstall = obj["fuse_install"] as? String ?? fuseInstall
+        fuseDocs = obj["fuse_docs"] as? String ?? fuseDocs
+        nextActions = obj["next"] as? [String] ?? []
+        if let raw = obj["checks"] as? [[String: Any]] {
+            checks = raw.compactMap { item in
+                guard let id = item["id"] as? String, let label = item["label"] as? String else { return nil }
+                return SetupCheck(
+                    id: id,
+                    ok: item["ok"] as? Bool ?? false,
+                    label: label,
+                    fix: item["fix"] as? String ?? ""
+                )
+            }
+        }
+    }
+
     private func summarizeProbe() {
         if logPath.isEmpty {
             let evidence = competingWait(from: events)
             probeJSON = pretty(evidence as Any)
-            status = evidence["wait_ms"] != nil ? "Queue probe captured a wait." : "Queue probe finished; wait evidence not yet in the log."
+            status = evidence["wait_ms"] is NSNull ? "Queue probe finished; wait evidence not yet in the log." : "Queue probe captured a wait."
             return
         }
         runSG(arguments: ["probe-log", "--log", logPath, "--json"]) { data in
@@ -309,9 +542,13 @@ final class AppState: ObservableObject {
         }
         if let wait = json?["wait_ms"] as? Double, wait > lastWaitMs {
             lastWaitMs = wait
+        } else if let n = json?["wait_ms"] as? NSNumber, n.doubleValue > lastWaitMs {
+            lastWaitMs = n.doubleValue
         }
         if let p = json?["pending"] as? Int {
             pending = p
+        } else if let n = json?["pending"] as? NSNumber {
+            pending = n.intValue
         }
         if json?["event"] as? String == "start" {
             activeOp = json?["op"] as? String ?? "active"
@@ -363,12 +600,17 @@ final class AppState: ObservableObject {
     }
 
     private func runSG(arguments: [String], raw: Bool = false, done: @escaping (Any) -> Void) {
+        sgTicket += 1
+        let ticket = sgTicket
+        busy = true
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: SGPaths.python3())
         proc.arguments = [SGPaths.sgCLI().path] + arguments
         proc.currentDirectoryURL = SGPaths.projectRoot()
         var env = ProcessInfo.processInfo.environment
         env["PYTHONPATH"] = SGPaths.projectRoot().path + ":" + SGPaths.projectRoot().appendingPathComponent("python").path
+        env["SPINDLEGUARD_ROOT"] = SGPaths.projectRoot().path
+        env["SPINDLEGUARD_SESSION_PARENT"] = sessionParentPath.isEmpty ? SGPaths.sessionParent().path : sessionParentPath
         proc.environment = env
         let out = Pipe()
         let err = Pipe()
@@ -381,6 +623,9 @@ final class AppState: ObservableObject {
                 let stdout = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 let stderr = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 DispatchQueue.main.async {
+                    if ticket == self.sgTicket {
+                        self.busy = false
+                    }
                     let errText = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
                     if proc.terminationStatus != 0 && !errText.isEmpty {
                         self.error = errText
@@ -400,6 +645,9 @@ final class AppState: ObservableObject {
                 }
             } catch {
                 DispatchQueue.main.async {
+                    if ticket == self.sgTicket {
+                        self.busy = false
+                    }
                     self.error = error.localizedDescription
                 }
             }

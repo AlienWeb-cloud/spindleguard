@@ -25,6 +25,7 @@ struct ContentView: View {
                 Divider()
                 Group {
                     switch state.pane {
+                    case .setup: SetupPane()
                     case .broker: BrokerPane()
                     case .queue: QueuePane()
                     case .identity: IdentityPane()
@@ -39,14 +40,45 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("New Session", action: state.newSession)
+                    .disabled(state.busy)
                 Button(state.running ? "Stop" : "Start") {
                     state.running ? state.stop() : state.start()
                 }
                 .keyboardShortcut(state.running ? "." : "r", modifiers: [.command])
+                .disabled(state.busy && !state.running)
                 Button("Open Mount", action: state.openMount)
                     .disabled(state.mount.isEmpty)
                 Button("Probe Queue", action: state.probeQueue)
                     .disabled(!state.running)
+                Menu("Control") {
+                    Button("Preview Setup", action: state.previewSetup)
+                    Button("Run Setup", action: state.runSetup)
+                    Button("Verify Install", action: state.verifyInstall)
+                    Button("Refresh Doctor", action: state.refreshDoctor)
+                    Divider()
+                    Button("Policy Check", action: state.policyCheck)
+                    Button("Preview Start", action: state.previewStart)
+                    Button("Unmount", action: state.unmountOnly)
+                        .disabled(state.mount.isEmpty)
+                    Button("Reveal Log", action: state.revealLog)
+                        .disabled(state.logPath.isEmpty)
+                    Divider()
+                    Button("Scan Tree", action: state.scanTree)
+                    Button("Bind Example Identity", action: state.bindIdentity)
+                    Button("Resolve Topology", action: state.runTopology)
+                        .disabled(state.source.isEmpty)
+                }
+            }
+        }
+        .overlay {
+            if state.busy {
+                ZStack {
+                    Color.black.opacity(0.08)
+                    ProgressView("Working…")
+                        .padding(16)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                }
+                .allowsHitTesting(true)
             }
         }
     }
@@ -57,7 +89,7 @@ struct ContentView: View {
                 Text("SPINDLEGUARD")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
-                Text(state.running ? "Mounted" : "Idle")
+                Text(state.running ? "Mounted" : (state.canMount ? "Idle" : "Setup"))
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(state.running ? sgBlue : Color.primary)
             }
@@ -91,6 +123,7 @@ struct ContentView: View {
 
     private func icon(_ pane: AppState.Pane) -> String {
         switch pane {
+        case .setup: return "gearshape"
         case .broker: return "externaldrive"
         case .queue: return "list.bullet.rectangle"
         case .identity: return "checkmark.shield"
