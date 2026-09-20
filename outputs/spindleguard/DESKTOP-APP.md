@@ -92,6 +92,8 @@ replace a review of unpublished local desktop code.
 ./sg doctor --json
 ./sg session-create --parent ./work --json
 ./sg session-load --file ./work/ui-session-*/session.json --json
+./sg session-list --parent ./work --json
+./sg ui --port 8765
 ./sg start --dry-run --source DIR --mount DIR --write-prefix /Workspace --delay-ms 150 --json
 ./sg unmount --mount DIR --dry-run
 ./sg scan --root . --json

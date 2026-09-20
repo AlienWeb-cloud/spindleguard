@@ -99,6 +99,8 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn('id="extraBtn"', page)
         self.assertIn("New Session", page)
         self.assertIn("Retain", page)
+
+    def test_info_plist(self):
         info = plistlib.loads((MACOS / "Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "cloud.alienweb.spindleguard")
         self.assertEqual(info["CFBundleExecutable"], "SpindleGuard")
