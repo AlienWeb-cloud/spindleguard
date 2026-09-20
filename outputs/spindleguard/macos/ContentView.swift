@@ -52,6 +52,8 @@ struct ContentView: View {
                 Button("Probe Queue", action: state.probeQueue)
                     .disabled(!state.running)
                 Menu("Control") {
+                    Button("First-Run Setup Wizard…", action: state.openWizard)
+                    Divider()
                     Button("Preview Setup", action: state.previewSetup)
                     Button("Run Setup", action: state.runSetup)
                     Button("Verify Install", action: state.verifyInstall)
@@ -70,6 +72,10 @@ struct ContentView: View {
                         .disabled(state.source.isEmpty)
                 }
             }
+        }
+        .sheet(isPresented: $state.showWizard) {
+            SetupWizard()
+                .environmentObject(state)
         }
         .overlay {
             if state.busy {

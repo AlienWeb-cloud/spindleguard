@@ -22,6 +22,7 @@ class AppBundleTests(unittest.TestCase):
             "BrokerService.swift",
             "ContentView.swift",
             "Panes.swift",
+            "Wizard.swift",
         ):
             self.assertTrue((MACOS / name).is_file(), name)
 
@@ -58,8 +59,15 @@ class AppBundleTests(unittest.TestCase):
             "func openFuseDocs()",
             "func listSessions()",
             "func showMainWindow()",
+            "func openWizard()",
+            "func finishWizard(skipped: Bool)",
+            "func maybePresentWizard()",
+            "func revealPane(_ pane: Pane)",
+            "func openSessionParent()",
         ):
             self.assertIn(needle, state)
+        self.assertIn('wizardKey = "SGWizardFinished"', state)
+        self.assertIn("wizardStepCount = 6", state)
         self.assertIn('["setup", "--json"]', state)
         self.assertIn('["setup", "--dry-run", "--json"]', state)
         self.assertNotIn(
@@ -71,6 +79,7 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("struct RetainPane", panes)
         self.assertIn("There is no deletion bucket", panes)
         self.assertIn("Run setup", panes)
+        self.assertIn("First-run wizard", panes)
         self.assertIn("Verify install", panes)
         self.assertIn("Copy FUSE-T command", panes)
         self.assertIn("Bind identity", panes)
@@ -82,12 +91,55 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("case .setup: SetupPane()", content)
         self.assertIn("case .retain: RetainPane()", content)
         self.assertIn('Button("Verify Install"', content)
+        self.assertIn("SetupWizard()", content)
+        self.assertIn(".sheet(isPresented: $state.showWizard)", content)
+        wizard = (MACOS / "Wizard.swift").read_text(encoding="utf-8")
+        self.assertIn("struct SetupWizard", wizard)
+        self.assertIn("First-run setup", wizard)
+        self.assertIn("Skip wizard", wizard)
+        self.assertIn("Disposable session", wizard)
         app = (MACOS / "SpindleGuardApp.swift").read_text(encoding="utf-8")
         self.assertIn('Button("Start")', app)
         self.assertIn('Button("Stop")', app)
         self.assertIn('CommandMenu("Setup")', app)
+        self.assertIn('Button("First-Run Setup Wizard', app)
         self.assertIn("MenuBarExtra", app)
         self.assertIn('systemImage: "externaldrive"', app)
+        self.assertIn('.menuBarExtraStyle(.menu)', app)
+        self.assertIn('Section("Window")', app)
+        self.assertIn('Section("Setup")', app)
+        self.assertIn('Section("Session")', app)
+        self.assertIn('Section("Broker")', app)
+        self.assertIn('Section("Identity")', app)
+        for extra in (
+            "Show SpindleGuard",
+            "First-Run Setup Wizard",
+            "Preview Setup",
+            "Run Setup",
+            "Verify Install",
+            "Install FUSE-T",
+            "Copy FUSE-T Command",
+            "Open FUSE-T Docs",
+            "Refresh Doctor",
+            "New Disposable Session",
+            "Load Session",
+            "Retained Sessions",
+            "Open Session Parent",
+            "Policy Check",
+            "Preview Start",
+            "Open Mount in Finder",
+            "Open Source in Finder",
+            "Reveal Log",
+            "Probe Queue",
+            "Scan Tree",
+            "Bind Example Identity",
+            "Load Example Identity",
+            "Load Failing Example",
+            "Rotate Manifest",
+            "Resolve Topology",
+            "Quit SpindleGuard",
+        ):
+            self.assertIn(f'Button("{extra}', app)
         self.assertIn("import UniformTypeIdentifiers", state)
         self.assertIn("sessionParent()", (MACOS / "SGPaths.swift").read_text(encoding="utf-8"))
         self.assertIn("func unmount(mount: String)", (MACOS / "BrokerService.swift").read_text(encoding="utf-8"))
@@ -99,14 +151,26 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn('id="extraBtn"', page)
         self.assertIn("New Session", page)
         self.assertIn("Retain", page)
+        self.assertIn("First-Run Setup Wizard", page)
+        self.assertIn("First-run setup", page)
+        self.assertIn("Skip wizard", page)
+        self.assertIn("SGWizardFinished", page)
+        self.assertIn('class="group">Window</p>', page)
+        self.assertIn('class="group">Setup</p>', page)
+        self.assertIn('class="group">Session</p>', page)
+        self.assertIn('class="group">Broker</p>', page)
+        self.assertIn('class="group">Identity</p>', page)
+        self.assertIn("maybePresentWizard", page)
+        self.assertIn("New Disposable Session", page)
+        self.assertIn("Resolve Topology", page)
 
     def test_info_plist(self):
         info = plistlib.loads((MACOS / "Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "cloud.alienweb.spindleguard")
         self.assertEqual(info["CFBundleExecutable"], "SpindleGuard")
         self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
-        self.assertEqual(info["CFBundleShortVersionString"], "0.5")
-        self.assertEqual(info["CFBundleVersion"], "5")
+        self.assertEqual(info["CFBundleShortVersionString"], "0.6")
+        self.assertEqual(info["CFBundleVersion"], "6")
         self.assertFalse(info["NSSupportsAutomaticTermination"])
 
     def test_make_app_requires_macos(self):
@@ -135,6 +199,7 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("python3 -B ./sg verify --quick", makefile)
         self.assertIn("verify --full", makefile)
         self.assertIn("macos/preview.html", makefile)
+        self.assertIn("macos/Wizard.swift", makefile)
 
 
 if __name__ == "__main__":

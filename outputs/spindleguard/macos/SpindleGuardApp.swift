@@ -20,6 +20,9 @@ struct SpindleGuardApp: App {
                     .keyboardShortcut("o", modifiers: [.command])
             }
             CommandMenu("Setup") {
+                Button("First-Run Setup Wizard…") { state.openWizard() }
+                    .keyboardShortcut("?", modifiers: [.command, .shift])
+                Divider()
                 Button("Preview Setup") { state.previewSetup() }
                 Button("Run Setup") { state.runSetup() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
@@ -70,21 +73,105 @@ struct SpindleGuardApp: App {
             Text(state.running ? "Mounted" : (state.canMount ? "Idle" : "Setup needed"))
             Text(state.status)
                 .foregroundStyle(.secondary)
-            Divider()
-            Button("Show SpindleGuard") { state.showMainWindow() }
-            Button("New Disposable Session") { state.newSession() }
-            Button(state.running ? "Stop Broker" : "Start Broker") {
-                state.running ? state.stop() : state.start()
+                .lineLimit(2)
+            Section("Window") {
+                Button("Show SpindleGuard") { state.showMainWindow() }
+                Button("First-Run Setup Wizard…") { state.openWizard() }
             }
-            Button("Verify Install") { state.verifyInstall() }
-            Button("Retained Sessions") {
-                state.showMainWindow()
-                state.listSessions()
-                state.pane = .retain
+            Section("Setup") {
+                Button("Preview Setup") {
+                    state.revealPane(.setup)
+                    state.previewSetup()
+                }
+                Button("Run Setup") {
+                    state.revealPane(.setup)
+                    state.runSetup()
+                }
+                Button("Verify Install") {
+                    state.revealPane(.setup)
+                    state.verifyInstall()
+                }
+                Button("Install FUSE-T…") {
+                    state.revealPane(.setup)
+                    state.installFuse()
+                }
+                Button("Copy FUSE-T Command") { state.copyFuseCommand() }
+                Button("Open FUSE-T Docs") { state.openFuseDocs() }
+                Button("Refresh Doctor") {
+                    state.revealPane(.doctor)
+                    state.refreshDoctor()
+                }
+            }
+            Section("Session") {
+                Button("New Disposable Session") { state.newSession() }
+                Button("Load Session…") { state.loadSession() }
+                Button("Retained Sessions") {
+                    state.revealPane(.retain)
+                    state.listSessions()
+                }
+                Button("Open Session Parent") { state.openSessionParent() }
+            }
+            Section("Broker") {
+                Button("Start") {
+                    state.revealPane(.broker)
+                    state.start()
+                }
+                .disabled(state.running)
+                Button("Stop") { state.stop() }
+                    .disabled(!state.running)
+                Button("Unmount") { state.unmountOnly() }
+                    .disabled(state.mount.isEmpty)
+                Button("Policy Check") {
+                    state.revealPane(.broker)
+                    state.policyCheck()
+                }
+                Button("Preview Start") {
+                    state.revealPane(.broker)
+                    state.previewStart()
+                }
+                Button("Open Mount in Finder") { state.openMount() }
+                    .disabled(state.mount.isEmpty)
+                Button("Open Source in Finder") { state.openSource() }
+                    .disabled(state.source.isEmpty)
+                Button("Reveal Log") { state.revealLog() }
+                    .disabled(state.logPath.isEmpty)
+                Button("Probe Queue") {
+                    state.revealPane(.queue)
+                    state.probeQueue()
+                }
+                .disabled(!state.running)
+            }
+            Section("Identity") {
+                Button("Scan Tree") {
+                    state.revealPane(.identity)
+                    state.scanTree()
+                }
+                Button("Bind Example Identity") {
+                    state.revealPane(.identity)
+                    state.bindIdentity()
+                }
+                Button("Load Example Identity") {
+                    state.revealPane(.identity)
+                    state.loadExampleIdentity()
+                }
+                Button("Load Failing Example") {
+                    state.revealPane(.identity)
+                    state.loadFailingExample()
+                }
+                Button("Rotate Manifest") {
+                    state.revealPane(.identity)
+                    state.rotateManifest()
+                }
+                Button("Resolve Topology") {
+                    state.revealPane(.topology)
+                    state.runTopology()
+                }
+                .disabled(state.source.isEmpty)
             }
             Divider()
             Button("Quit SpindleGuard") { NSApplication.shared.terminate(nil) }
         }
+        .menuBarExtraStyle(.menu)
         Settings {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SpindleGuard is a test-only prototype.")

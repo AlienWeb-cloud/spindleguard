@@ -76,6 +76,11 @@ final class AppState: ObservableObject {
     @Published var nextActions: [String] = []
     @Published var checks: [SetupCheck] = []
     @Published var sessions: [SessionInfo] = []
+    @Published var showWizard: Bool = false
+    @Published var wizardStep: Int = 0
+
+    static let wizardKey = "SGWizardFinished"
+    static let wizardStepCount = 6
 
     private let broker = BrokerService()
     private var lineBuffer = ""
@@ -103,6 +108,7 @@ final class AppState: ObservableObject {
         }
         refreshDoctor()
         listSessions()
+        maybePresentWizard()
     }
 
     var policyProblem: String? {
@@ -240,6 +246,44 @@ final class AppState: ObservableObject {
         NSApplication.shared.activate(ignoringOtherApps: true)
         if let window = NSApplication.shared.windows.first(where: { $0.canBecomeMain }) {
             window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func revealPane(_ pane: Pane) {
+        showMainWindow()
+        self.pane = pane
+    }
+
+    func maybePresentWizard() {
+        if !UserDefaults.standard.bool(forKey: Self.wizardKey) {
+            wizardStep = 0
+            showWizard = true
+        }
+    }
+
+    func openWizard() {
+        wizardStep = 0
+        showWizard = true
+        showMainWindow()
+    }
+
+    func wizardBack() {
+        if wizardStep > 0 { wizardStep -= 1 }
+    }
+
+    func wizardNext() {
+        if wizardStep < Self.wizardStepCount - 1 { wizardStep += 1 }
+    }
+
+    func finishWizard(skipped: Bool) {
+        UserDefaults.standard.set(true, forKey: Self.wizardKey)
+        showWizard = false
+        if skipped || source.isEmpty {
+            pane = .setup
+            status = skipped ? "Wizard skipped. Use Setup whenever you want." : "Wizard finished. Create a session from Setup when you are ready."
+        } else {
+            pane = .broker
+            status = "Wizard finished. Session is retained. Start when this Mac can mount."
         }
     }
 

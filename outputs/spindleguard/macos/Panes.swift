@@ -11,6 +11,8 @@ struct SetupPane: View {
                     .font(.title2.weight(.semibold))
                 Text("One-command install on a Mac: FUSE-T (confirmed Homebrew only), then the broker and this app. Nothing here mounts, opens /dev, or deletes files.")
                     .foregroundStyle(.secondary)
+                Button("First-run wizard…") { state.openWizard() }
+                    .disabled(state.busy)
                 CheckList(checks: state.checks)
                 if !state.nextActions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {

@@ -65,6 +65,17 @@ terminates the process. Session files are never deleted.
 Every `sg` subcommand that the prototype exposes is reachable from a
 button, the Control menu, the Setup/Broker/Control command menus, or the
 **menu bar extra** (the SpindleGuard disk icon in the macOS menu bar).
+The extra is grouped the same way as those menus: Window, Setup, Session,
+Broker, Identity. Labels match the window. Disabled items stay disabled
+(Start while mounted, Stop while idle, Probe Queue while idle, Finder
+actions without a path).
+
+A **first-run setup wizard** opens on launch until `SGWizardFinished` is
+stored in UserDefaults (or `localStorage` in `./sg ui`). Six steps:
+Welcome, This Mac (doctor), FUSE-T, Build, Verify, Disposable session.
+Skip still marks the wizard finished so it does not nag; reopen it from
+Setup, the Setup menu, or the extra. Homebrew is still never run unless
+you confirm.
 
 A loopback preview of the same chrome is available without compiling Swift:
 

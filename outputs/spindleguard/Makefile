@@ -14,7 +14,8 @@ SWIFT_SRC = \
 	macos/SGPaths.swift \
 	macos/BrokerService.swift \
 	macos/ContentView.swift \
-	macos/Panes.swift
+	macos/Panes.swift \
+	macos/Wizard.swift
 
 .PHONY: all test test-control test-bindcheck app setup verify verify-full
 

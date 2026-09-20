@@ -44,18 +44,44 @@ body {
   padding: 2px 8px; border-radius: 4px; cursor: pointer;
 }
 .extra:hover, .extra.open { background: rgba(36,88,201,.12); }
+.desktop { position: relative; }
 .extra-menu {
-  display: none; position: absolute; top: 28px; right: 12px; width: 240px;
+  display: none; position: absolute; top: 28px; right: 12px; width: 280px;
+  max-height: calc(100vh - 40px); overflow: auto;
   background: #f6f8fb; border: 1px solid var(--line); border-radius: 8px;
-  box-shadow: 0 18px 40px rgba(32,49,67,.18); padding: 6px 0; z-index: 5;
+  box-shadow: 0 18px 40px rgba(32,49,67,.18); padding: 6px 0; z-index: 7;
 }
 .extra-menu.open { display: block; }
 .extra-menu button, .extra-menu p {
   display: block; width: 100%; text-align: left; border: 0; background: none;
-  padding: 7px 14px; font: inherit; cursor: pointer;
+  padding: 6px 14px; font: inherit; cursor: pointer;
 }
 .extra-menu p { color: var(--slate); cursor: default; margin: 0; }
+.extra-menu .group {
+  font-size: 11px; font-weight: 650; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--slate); padding: 8px 14px 2px; cursor: default;
+}
+.extra-menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
 .extra-menu button:hover { background: var(--blue); color: #fff; }
+.extra-menu button:disabled { opacity: .45; cursor: default; }
+.wizard {
+  display: none; position: absolute; inset: 28px 0 0; z-index: 6;
+  background: rgba(20,30,40,.32); align-items: center; justify-content: center;
+}
+.wizard.on { display: flex; }
+.wizard-card {
+  width: min(560px, calc(100% - 48px)); min-height: 420px; max-height: min(520px, calc(100vh - 90px));
+  background: #f4f6f8; border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(32,49,67,.28); padding: 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.wizard-card h2 { margin: 0; font-size: 22px; }
+.wizard-card h3 { margin: 0 0 6px; font-size: 16px; }
+.wizard-card .lede { margin: 0 0 8px; }
+.wizard-nav { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+.wizard-nav .spacer { flex: 1; }
+.wizard-body { flex: 1; overflow: auto; }
+.wizard-body pre { max-height: 140px; }
 .stage { flex: 1; padding: 28px 36px 40px; }
 .window {
   width: min(1180px, 100%);
@@ -145,11 +171,55 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
   </div>
   <div class="extra-menu" id="extraMenu">
     <p id="extraStatus">Setup needed</p>
-    <button type="button" onclick="showPane('setup')">Show SpindleGuard</button>
-    <button type="button" onclick="newSession()">New Disposable Session</button>
-    <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify Install</button>
-    <button type="button" onclick="showPane('retain')">Retained Sessions</button>
-    <button type="button">Quit SpindleGuard</button>
+    <p class="group">Window</p>
+    <button type="button" onclick="extra('show')">Show SpindleGuard</button>
+    <button type="button" onclick="extra('wizard')">First-Run Setup Wizard…</button>
+    <p class="group">Setup</p>
+    <button type="button" onclick="extra('preview-setup')">Preview Setup</button>
+    <button type="button" onclick="extra('run-setup')">Run Setup</button>
+    <button type="button" onclick="extra('verify')">Verify Install</button>
+    <button type="button" onclick="extra('install-fuse')">Install FUSE-T…</button>
+    <button type="button" onclick="extra('copy-fuse')">Copy FUSE-T Command</button>
+    <button type="button" onclick="extra('fuse-docs')">Open FUSE-T Docs</button>
+    <button type="button" onclick="extra('doctor')">Refresh Doctor</button>
+    <p class="group">Session</p>
+    <button type="button" onclick="extra('new-session')">New Disposable Session</button>
+    <button type="button" onclick="extra('load-session')">Load Session…</button>
+    <button type="button" onclick="extra('retain')">Retained Sessions</button>
+    <button type="button" onclick="extra('session-parent')">Open Session Parent</button>
+    <p class="group">Broker</p>
+    <button type="button" onclick="extra('start')">Start</button>
+    <button type="button" onclick="extra('stop')" disabled>Stop</button>
+    <button type="button" onclick="extra('unmount')">Unmount</button>
+    <button type="button" onclick="extra('policy')">Policy Check</button>
+    <button type="button" onclick="extra('preview-start')">Preview Start</button>
+    <button type="button" onclick="extra('open-mount')">Open Mount in Finder</button>
+    <button type="button" onclick="extra('open-source')">Open Source in Finder</button>
+    <button type="button" onclick="extra('reveal-log')">Reveal Log</button>
+    <button type="button" onclick="extra('queue')">Probe Queue</button>
+    <p class="group">Identity</p>
+    <button type="button" onclick="extra('scan')">Scan Tree</button>
+    <button type="button" onclick="extra('bind')">Bind Example Identity</button>
+    <button type="button" onclick="extra('example')">Load Example Identity</button>
+    <button type="button" onclick="extra('failing')">Load Failing Example</button>
+    <button type="button" onclick="extra('rotate')">Rotate Manifest</button>
+    <button type="button" onclick="extra('topology')">Resolve Topology</button>
+    <hr>
+    <button type="button" onclick="extra('quit')">Quit SpindleGuard</button>
+  </div>
+  <div class="wizard" id="wizard">
+    <div class="wizard-card">
+      <h2>First-run setup</h2>
+      <p class="lede" id="wizardStepLabel">Step 1 of 6</p>
+      <progress id="wizardProgress" max="6" value="1" style="width:100%"></progress>
+      <div class="wizard-body" id="wizardBody"></div>
+      <div class="wizard-nav">
+        <button type="button" class="btn" id="wizardBack" onclick="wizardBack()">Back</button>
+        <button type="button" class="btn" onclick="finishWizard(true)">Skip wizard</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="wizardNext" onclick="wizardAdvance()">Continue</button>
+      </div>
+    </div>
   </div>
   <div class="stage">
     <div class="window" style="position:relative">
@@ -180,6 +250,7 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
           <div class="pane" id="pane-setup">
             <h2>Setup</h2>
             <p class="lede">One-command install on a Mac: FUSE-T (confirmed Homebrew only), then the broker and this app. Nothing here mounts, opens /dev, or deletes files.</p>
+            <div class="row"><button type="button" onclick="openWizard()">First-run wizard…</button></div>
             <div class="checks" id="setupChecks"></div>
             <div class="row" style="margin-top:14px">
               <button type="button" onclick="run(['setup','--dry-run','--json'], 'setup')">Preview setup</button>
@@ -307,9 +378,17 @@ async function run(argv, sink){
       $("modeLabel").textContent = data.can_mount ? "Idle" : "Setup";
       $("extraStatus").textContent = data.can_mount ? "Idle" : "Setup needed";
       if(data.fuse_install) state.fuse = data.fuse_install;
+      if($("wizardChecks")) renderChecks("wizardChecks", data.checks);
+      if($("wizardFuse")) $("wizardFuse").textContent = state.fuse;
     }
-    if(sink === "setup") $("setupJSON").textContent = JSON.stringify(data, null, 2);
-    if(sink === "verify") $("verifyJSON").textContent = JSON.stringify(data, null, 2);
+    if(sink === "setup"){
+      $("setupJSON").textContent = JSON.stringify(data, null, 2);
+      if($("wizardSetup")) $("wizardSetup").textContent = $("setupJSON").textContent;
+    }
+    if(sink === "verify"){
+      $("verifyJSON").textContent = JSON.stringify(data, null, 2);
+      if($("wizardVerify")) $("wizardVerify").textContent = $("verifyJSON").textContent;
+    }
     if(sink === "scan") $("scanJSON").textContent = JSON.stringify(data, null, 2);
     if(sink === "bind") $("bindJSON").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
     if(body.ok) setStatus(sink + " finished.");
@@ -368,14 +447,91 @@ async function topology(){
   $("topologyJSON").textContent = (body && (body.data || body.stderr || body.error)) || "";
 }
 function copyFuse(){ navigator.clipboard.writeText(state.fuse); setStatus("Copied: " + state.fuse); }
+function closeExtra(){ $("extraMenu").classList.remove("open"); $("extraBtn").classList.remove("open"); }
 function toggleExtra(){ $("extraMenu").classList.toggle("open"); $("extraBtn").classList.toggle("open"); }
+function extra(action){
+  closeExtra();
+  if(action === "show"){ showPane(state.pane || "setup"); return; }
+  if(action === "wizard"){ openWizard(); return; }
+  if(action === "preview-setup"){ showPane("setup"); run(["setup","--dry-run","--json"], "setup"); return; }
+  if(action === "run-setup"){ showPane("setup"); run(["setup","--json"], "setup"); return; }
+  if(action === "verify"){ showPane("setup"); run(["verify","--quick","--json"], "verify"); return; }
+  if(action === "install-fuse"){ showPane("setup"); run(["setup","--install-fuse","--yes","--json"], "setup"); return; }
+  if(action === "copy-fuse"){ copyFuse(); return; }
+  if(action === "fuse-docs"){ window.open("https://github.com/macos-fuse-t/fuse-t", "_blank", "noopener"); return; }
+  if(action === "doctor"){ showPane("doctor"); run(["doctor","--json"], "doctor"); return; }
+  if(action === "new-session"){ newSession(); return; }
+  if(action === "load-session"){ showPane("retain"); setStatus("Choose a retained session to load. There is no deletion bucket."); return; }
+  if(action === "retain"){ showPane("retain"); return; }
+  if(action === "session-parent"){ showPane("setup"); setStatus("Session parent is shown on Setup. Preview does not open Finder."); return; }
+  if(action === "start"){ showPane("broker"); run(["start","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start"); return; }
+  if(action === "stop"){ setStatus("Stop is native-only. Preview does not mount."); return; }
+  if(action === "unmount"){ showPane("broker"); run(["unmount","--mount",$("mount").value,"--json"], "start"); return; }
+  if(action === "policy"){ policyCheck(); return; }
+  if(action === "preview-start"){ previewStart(); return; }
+  if(action === "open-mount"){ setStatus("Open Mount is native Finder. Preview cannot open folders."); return; }
+  if(action === "open-source"){ setStatus("Open Source is native Finder. Preview cannot open folders."); return; }
+  if(action === "reveal-log"){ setStatus("Reveal Log is native Finder. Preview cannot open folders."); return; }
+  if(action === "queue"){ showPane("queue"); setStatus("Probe Queue needs a live mount on macOS."); return; }
+  if(action === "scan"){ showPane("identity"); run(["scan","--root",".","--json"], "scan"); return; }
+  if(action === "bind"){ showPane("identity"); bindExample(); return; }
+  if(action === "example"){ showPane("identity"); setStatus("Loaded example fixture. Bind does not open host /dev."); return; }
+  if(action === "failing"){ showPane("identity"); setStatus("Loaded failing-media example. Fingerprint should be skipped."); return; }
+  if(action === "rotate"){ showPane("identity"); setStatus("Rotation stays on Identity. Dry-run is the default."); return; }
+  if(action === "topology"){ topology(); return; }
+  if(action === "quit"){ setStatus("Quit is native-only. Close this preview tab instead."); return; }
+}
+const WIZARD_KEY = "SGWizardFinished";
+const WIZARD_STEPS = 6;
+let wizardStep = 0;
+function openWizard(){
+  wizardStep = 0;
+  $("wizard").classList.add("on");
+  closeExtra();
+  renderWizard();
+}
+function wizardBack(){ if(wizardStep > 0){ wizardStep -= 1; renderWizard(); } }
+function wizardAdvance(){
+  if(wizardStep < WIZARD_STEPS - 1){ wizardStep += 1; renderWizard(); }
+  else finishWizard(false);
+}
+function finishWizard(skipped){
+  localStorage.setItem(WIZARD_KEY, "1");
+  $("wizard").classList.remove("on");
+  if(skipped){ showPane("setup"); setStatus("Wizard skipped. Use Setup whenever you want."); }
+  else if(!state.source){ showPane("setup"); setStatus("Wizard finished. Create a session from Setup when you are ready."); }
+  else { showPane("broker"); setStatus("Wizard finished. Session is retained. Start when this Mac can mount."); }
+}
+function maybePresentWizard(){ if(!localStorage.getItem(WIZARD_KEY)) openWizard(); }
+function renderWizard(){
+  $("wizardStepLabel").textContent = "Step " + (wizardStep + 1) + " of " + WIZARD_STEPS;
+  $("wizardProgress").value = wizardStep + 1;
+  $("wizardBack").disabled = wizardStep === 0;
+  $("wizardNext").textContent = wizardStep < WIZARD_STEPS - 1 ? "Continue" : "Finish";
+  const steps = [
+    `<h3>Welcome</h3><p>SpindleGuard is a test-only prototype. It does not protect evidence drives or confine agents.</p><p>It refuses /Volumes and /dev. It never deletes files. There is no deletion bucket.</p><p class="lede">This wizard checks the Mac, optionally installs FUSE-T (only if you confirm), builds the broker and this app, verifies the install, then can create a disposable session.</p>`,
+    `<h3>This Mac</h3><p class="lede">Doctor does not mount and does not open /dev.</p><div class="row"><button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh checks</button></div><div class="checks" id="wizardChecks"></div>`,
+    `<h3>FUSE-T</h3><p class="lede">Needed only to mount. Homebrew is never run unless you confirm.</p><pre id="wizardFuse"></pre><div class="row"><button type="button" onclick="copyFuse()">Copy install command</button><button type="button" onclick="run(['setup','--install-fuse','--yes','--json'], 'setup')">Install FUSE-T…</button><button type="button" onclick="window.open('https://github.com/macos-fuse-t/fuse-t','_blank','noopener')">Open docs</button></div>`,
+    `<h3>Build</h3><p class="lede">Run Setup builds the Swift app when swiftc is present, and the C broker only when FUSE-T is already installed.</p><div class="row"><button type="button" onclick="run(['setup','--dry-run','--json'], 'setup')">Preview setup</button><button type="button" onclick="run(['setup','--json'], 'setup')">Run setup</button></div><pre id="wizardSetup"></pre>`,
+    `<h3>Verify</h3><p class="lede">Quick checks only: policy, scan, fixture bind, CLI. No FUSE mounts.</p><div class="row"><button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify install</button></div><pre id="wizardVerify"></pre>`,
+    `<h3>Disposable session</h3><p class="lede">Creates a retained source and mount under the session parent. Files are not deleted. After Finish you can Start from Broker when this Mac can mount.</p><div class="row"><button type="button" onclick="newSession()">New disposable session</button></div>`
+  ];
+  $("wizardBody").innerHTML = steps[wizardStep];
+  if(wizardStep === 1){
+    const src = $("setupChecks").innerHTML;
+    if(src) $("wizardChecks").innerHTML = src;
+  }
+  if(wizardStep === 2) $("wizardFuse").textContent = state.fuse;
+  if(wizardStep === 3 && $("setupJSON")) $("wizardSetup").textContent = $("setupJSON").textContent;
+  if(wizardStep === 4 && $("verifyJSON")) $("wizardVerify").textContent = $("verifyJSON").textContent;
+}
 function tick(){ const d=new Date(); $("clock").textContent = d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
 renderSidebar();
 showPane("setup");
 tick();
 setInterval(tick, 1000);
 setStatus(state.status);
-run(["doctor","--json"], "doctor");
+run(["doctor","--json"], "doctor").then(() => maybePresentWizard());
 </script>
 </body>
 </html>
