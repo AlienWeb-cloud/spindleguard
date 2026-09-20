@@ -78,7 +78,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn("volumes-refusal", names)
         self.assertIn("scan", names)
         self.assertIn("bind-example", names)
-        self.assertIn("purge-requires-yes", names)
+        self.assertIn("destroy-requires-yes", names)
         self.assertIn("unmount-volumes", names)
 
     def test_cli_verify_quick(self):
