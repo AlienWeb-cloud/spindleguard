@@ -24,6 +24,8 @@ were made during development. The prototype refuses source and mount paths under
   verify serial / PARTUUID / FS-UUID independently, return the fd. Device-shaped
   `open()` outside `bindcheck/` fails the control-plane suite. See
   [BINDCHECK.md](BINDCHECK.md).
+- Native macOS SwiftUI app (`make app`) with Broker, Queue, Identity, Topology
+  and Doctor panes wired to the C broker and `./sg`. See [DESKTOP-APP.md](DESKTOP-APP.md).
 
 See [architecture and reuse research](ARCHITECTURE.md), [upstream attribution](PROVENANCE.md)
 and [recorded proof](PROOF.md).
@@ -58,6 +60,15 @@ Agent-safe tests (no mounts, no host `/dev` or `/Volumes`):
 ```sh
 SG_REQUIRE_FULL=1 make test-control
 make test-bindcheck
+```
+
+Native Mac UI (macOS 13+, Command Line Tools, FUSE-T):
+
+```sh
+make
+make app
+open outputs/spindleguard/SpindleGuard.app
+./outputs/spindleguard/sg --help
 ```
 
 `make test` runs five topology tests, then real read/write and read-only mounts.

@@ -55,7 +55,8 @@ to obtain an fd, then binds on serial / PARTUUID / FS-UUID and the fd's
 major:minor, and returns that fd. Permission-shaped checks (exists, read-only,
 path allow-list) are not sufficient: names such as `sda1` move. See
 [BINDCHECK.md](BINDCHECK.md). Device-shaped `open()` outside `bindcheck/`
-fails the control-plane suite.
+fails the control-plane suite. The native Mac app (`make app`) is a SwiftUI
+front door over the same policy, broker, and `sg` CLI. See [DESKTOP-APP.md](DESKTOP-APP.md).
 
 Production: one broker process owns all roots and a queue per stable physical
 media identity. diskN names are session identifiers and can change after eject.

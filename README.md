@@ -29,6 +29,7 @@ git clone https://github.com/AlienWeb-cloud/spindleguard.git
 cd spindleguard
 make
 SG_REQUIRE_FULL=1 make test-control   # identity binding + topology; no mounts
+make app                              # native SwiftUI app; macOS only
 make test                             # FUSE-T mount proof; Mac + disposable data
 ```
 
@@ -38,9 +39,10 @@ logs under `work/`; they do not delete files. Read the installation guide first.
 ## Scope
 
 Working: one source tree, one queue, real file reads and permitted writes,
-structured logs, a separate read-only physical-device lookup tool, and
+structured logs, a separate read-only physical-device lookup tool,
 `bindcheck.assert_bound()` so a device fd is bound by identity (serial /
-PARTUUID / FS-UUID) rather than by a path that can move. The control-plane
+PARTUUID / FS-UUID) rather than by a path that can move, and a native macOS
+SwiftUI app (`make app`) wired to that control plane. The control-plane
 suite fails if a device-shaped `open()` exists outside `bindcheck/`.
 
 Not yet implemented: shared queues across mounts, whole-copy reservations,
@@ -53,6 +55,8 @@ subset. **It does not yet protect evidence drives or confine Claude/Codex.**
 - `outputs/spindleguard/`: prototype source, tests and engineering documentation.
 - `outputs/spindleguard/bindcheck/`: identity-binding layer; see
   [BINDCHECK.md](outputs/spindleguard/BINDCHECK.md).
+- `outputs/spindleguard/macos/`: native SwiftUI app sources; see
+  [DESKTOP-APP.md](outputs/spindleguard/DESKTOP-APP.md).
 - `docs/`: static marketing website, served by GitHub Pages; no build dependencies.
 - `work/`: ignored local scratch space and disposable fixtures.
 

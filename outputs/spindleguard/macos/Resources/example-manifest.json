@@ -1,0 +1,7 @@
+{
+  "serial": "SERIAL-A",
+  "partuuid": "PART-A",
+  "fs_uuid": "FS-A",
+  "media_class": "stable",
+  "allow_fingerprint": false
+}

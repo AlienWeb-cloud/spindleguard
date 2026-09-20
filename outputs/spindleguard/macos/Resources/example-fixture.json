@@ -1,0 +1,14 @@
+{
+  "blocks": [
+    {
+      "path": "/dev/sda1",
+      "serial": "SERIAL-A",
+      "partuuid": "PART-A",
+      "fs_uuid": "FS-A",
+      "major": 8,
+      "minor": 1,
+      "ro": true,
+      "usb_bridge": false
+    }
+  ]
+}
