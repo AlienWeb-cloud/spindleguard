@@ -64,6 +64,7 @@ def create_session(parent: Path) -> dict[str, Any]:
         "write_prefix": "/Workspace",
         "created_ns": stamp,
         "retained": True,
+        "deletion_bucket": False,
     }
     (root / "session.json").write_text(
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -80,4 +81,29 @@ def load_session(path: Path) -> dict[str, Any]:
     check_host_paths(data["source"], data["mount"])
     check_observe_path(data["log"])
     check_observe_path(data["session"])
+    data["retained"] = True
+    data["deletion_bucket"] = False
     return data
+
+
+def list_sessions(parent: Path) -> dict[str, Any]:
+    check_session_parent(str(parent))
+    root = Path(parent)
+    items: list[dict[str, Any]] = []
+    if root.is_dir():
+        for path in sorted(root.glob("ui-session-*")):
+            marker = path / "session.json"
+            if not marker.is_file():
+                continue
+            try:
+                items.append(load_session(marker))
+            except (PolicyError, OSError, json.JSONDecodeError, KeyError):
+                continue
+    return {
+        "parent": str(root),
+        "sessions": items,
+        "retained": True,
+        "deletion_buckets": False,
+        "deletes": False,
+        "note": "Prototype retains sessions. There is no deletion bucket.",
+    }

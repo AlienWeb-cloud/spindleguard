@@ -78,6 +78,7 @@ app:
 	cp tools/topology.py $(APP_RES)/tools/topology.py
 	cp macos/Resources/*.json $(APP_RES)/
 	cp macos/Resources/*.json $(APP_RES)/macos/Resources/
+	cp macos/preview.html $(APP_RES)/preview.html
 	@echo "Built $(APP)"
 	@echo "  open $(APP)"
 	@echo "  ./sg app"

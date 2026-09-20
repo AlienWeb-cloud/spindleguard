@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpindleGuard</title>
+<style>
+:root {
+  --blue: #2458c9;
+  --ink: #1d2a38;
+  --slate: #5b6d7d;
+  --line: #d5dde6;
+  --paper: #e8eef4;
+  --window: #f4f6f8;
+  --sidebar: #eceff3;
+  --ok: #2458c9;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(1200px 700px at 20% 0%, #d7e4f4 0%, #c9d5e2 42%, #b7c4d2 100%);
+}
+.desktop { min-height: 100%; display: flex; flex-direction: column; }
+.menubar {
+  height: 28px;
+  background: rgba(246,248,251,.82);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(80,100,120,.18);
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+}
+.menubar .apple { font-size: 15px; margin-right: 16px; }
+.menubar b { margin-right: 16px; }
+.menubar span { margin-right: 14px; color: #314255; }
+.menubar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; color: #314255; }
+.extra {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px; border-radius: 4px; cursor: pointer;
+}
+.extra:hover, .extra.open { background: rgba(36,88,201,.12); }
+.extra-menu {
+  display: none; position: absolute; top: 28px; right: 12px; width: 240px;
+  background: #f6f8fb; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(32,49,67,.18); padding: 6px 0; z-index: 5;
+}
+.extra-menu.open { display: block; }
+.extra-menu button, .extra-menu p {
+  display: block; width: 100%; text-align: left; border: 0; background: none;
+  padding: 7px 14px; font: inherit; cursor: pointer;
+}
+.extra-menu p { color: var(--slate); cursor: default; margin: 0; }
+.extra-menu button:hover { background: var(--blue); color: #fff; }
+.stage { flex: 1; padding: 28px 36px 40px; }
+.window {
+  width: min(1180px, 100%);
+  height: min(760px, calc(100vh - 90px));
+  margin: 0 auto;
+  background: var(--window);
+  border-radius: 10px;
+  box-shadow: 0 28px 70px rgba(32,49,67,.28);
+  border: 1px solid rgba(255,255,255,.55);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.titlebar {
+  height: 38px; display: flex; align-items: center; gap: 8px;
+  padding: 0 14px; background: #e7ebf0; border-bottom: 1px solid var(--line);
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+.titlebar strong { margin-left: 8px; font-weight: 600; font-size: 13px; }
+.toolbar { margin-left: auto; display: flex; gap: 6px; }
+.toolbar button, .btn, .pane button {
+  border: 1px solid var(--line); background: #fff; border-radius: 6px;
+  padding: 5px 10px; font: 12px/1.2 inherit; cursor: pointer; color: var(--ink);
+}
+.toolbar button:hover, .btn:hover, .pane button:hover { border-color: var(--blue); color: var(--blue); }
+.toolbar button:disabled, .pane button:disabled { opacity: .45; cursor: default; }
+.body { flex: 1; display: flex; min-height: 0; }
+.sidebar {
+  width: 188px; background: var(--sidebar); border-right: 1px solid var(--line);
+  padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;
+}
+.nav {
+  border: 0; background: transparent; text-align: left; padding: 8px 10px;
+  border-radius: 7px; font: 13px inherit; cursor: pointer; color: var(--ink);
+}
+.nav.active { background: rgba(36,88,201,.14); color: #1b459f; font-weight: 600; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.instrument {
+  display: flex; gap: 28px; align-items: center;
+  padding: 14px 20px; border-bottom: 1px solid var(--line); background: #fafbfd;
+}
+.kicker { font: 10px/1 Menlo, monospace; letter-spacing: 1.2px; color: var(--slate); }
+.instrument h1 { margin: 4px 0 0; font-size: 22px; font-weight: 650; }
+.instrument h1.setup { color: var(--ink); }
+.instrument h1.mounted { color: var(--blue); }
+.metric { min-width: 72px; }
+.metric label { display: block; font: 9px/1 Menlo, monospace; color: var(--slate); letter-spacing: .8px; }
+.metric b { font: 600 16px/1.4 Menlo, monospace; }
+.pane { display: none; padding: 20px; overflow: auto; }
+.pane.active { display: block; }
+.pane h2 { margin: 0 0 6px; font-size: 22px; font-weight: 650; }
+.lede { color: var(--slate); margin: 0 0 16px; max-width: 720px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.checks, .banner, .form, pre {
+  background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+}
+.check { display: flex; gap: 8px; padding: 4px 0; }
+.mark { width: 16px; text-align: center; color: var(--blue); }
+.mark.bad { color: var(--slate); }
+.fix { font: 11px Menlo, monospace; color: var(--slate); margin: 0; }
+.form label { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: center; margin: 6px 0; }
+.form input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12px Menlo, monospace; }
+pre { font: 11px/1.45 Menlo, monospace; overflow: auto; max-height: 220px; white-space: pre-wrap; }
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.busy {
+  display: none; position: absolute; inset: 38px 0 0; background: rgba(20,30,40,.08);
+  align-items: center; justify-content: center;
+}
+.busy.on { display: flex; }
+.pill { padding: 10px 16px; background: #fff; border-radius: 10px; border: 1px solid var(--line); }
+.caption { font-size: 12px; color: var(--slate); text-align: center; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="desktop">
+  <div class="menubar">
+    <span class="apple"></span>
+    <b>SpindleGuard</b>
+    <span>File</span><span>Setup</span><span>Broker</span><span>Control</span>
+    <div class="right">
+      <span id="clock"></span>
+      <div class="extra" id="extraBtn" onclick="toggleExtra()">
+        <svg width="13" height="13" viewBox="0 0 32 32" fill="none" stroke="#2458c9" stroke-width="1.8"><circle cx="16" cy="16" r="12"/><circle cx="16" cy="16" r="5"/></svg>
+        SpindleGuard
+      </div>
+    </div>
+  </div>
+  <div class="extra-menu" id="extraMenu">
+    <p id="extraStatus">Setup needed</p>
+    <button type="button" onclick="showPane('setup')">Show SpindleGuard</button>
+    <button type="button" onclick="newSession()">New Disposable Session</button>
+    <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify Install</button>
+    <button type="button" onclick="showPane('retain')">Retained Sessions</button>
+    <button type="button">Quit SpindleGuard</button>
+  </div>
+  <div class="stage">
+    <div class="window" style="position:relative">
+      <div class="titlebar">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <strong>SpindleGuard</strong>
+        <div class="toolbar">
+          <button type="button" onclick="newSession()">New Session</button>
+          <button type="button" id="startBtn" disabled>Start</button>
+          <button type="button" onclick="showPane('queue')">Probe Queue</button>
+          <button type="button" onclick="run(['setup','--json'], 'setup')">Run Setup</button>
+          <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify</button>
+        </div>
+      </div>
+      <div class="body">
+        <aside class="sidebar" id="sidebar"></aside>
+        <section class="main">
+          <div class="instrument">
+            <div>
+              <div class="kicker">SPINDLEGUARD</div>
+              <h1 id="modeLabel" class="setup">Setup</h1>
+            </div>
+            <div class="metric"><label>ACTIVE</label><b id="mActive">0 / 1</b></div>
+            <div class="metric"><label>PENDING</label><b id="mPending">0</b></div>
+            <div class="metric"><label>WAIT</label><b id="mWait">0.0 ms</b></div>
+            <div class="metric"><label>OP</label><b id="mOp">IDLE</b></div>
+          </div>
+          <div class="pane" id="pane-setup">
+            <h2>Setup</h2>
+            <p class="lede">One-command install on a Mac: FUSE-T (confirmed Homebrew only), then the broker and this app. Nothing here mounts, opens /dev, or deletes files.</p>
+            <div class="checks" id="setupChecks"></div>
+            <div class="row" style="margin-top:14px">
+              <button type="button" onclick="run(['setup','--dry-run','--json'], 'setup')">Preview setup</button>
+              <button type="button" onclick="run(['setup','--json'], 'setup')">Run setup</button>
+              <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify install</button>
+              <button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh doctor</button>
+            </div>
+            <div class="row">
+              <button type="button" onclick="copyFuse()">Copy FUSE-T command</button>
+              <button type="button" onclick="newSession()">New disposable session</button>
+            </div>
+            <div class="banner" id="setupStatus"></div>
+            <h3>Setup report</h3>
+            <pre id="setupJSON">Run setup to fill this report.</pre>
+            <h3>Verify report</h3>
+            <pre id="verifyJSON">Run verify to fill this report.</pre>
+          </div>
+          <div class="pane" id="pane-broker">
+            <h2>Broker</h2>
+            <p class="lede">Disposable test data only. The prototype refuses /Volumes and /dev, requires a .spindleguard-test-root marker, and serializes backing work through one FIFO queue.</p>
+            <div class="row">
+              <button type="button" onclick="newSession()">New session</button>
+              <button type="button" onclick="policyCheck()">Policy check</button>
+              <button type="button" onclick="previewStart()">Preview start</button>
+            </div>
+            <div class="form">
+              <label>Source <input id="source" type="text"></label>
+              <label>Mount <input id="mount" type="text"></label>
+              <label>Write prefix <input id="prefix" type="text" value="/Workspace"></label>
+              <label>Log <input id="logPath" type="text"></label>
+            </div>
+            <div class="banner" id="brokerStatus"></div>
+            <pre id="policyJSON"></pre>
+          </div>
+          <div class="pane" id="pane-queue">
+            <h2>Queue</h2>
+            <p class="lede">Live stderr from the C broker. A competing request should wait while one backing callback is active.</p>
+            <table>
+              <thead><tr><th>Event</th><th>Op</th><th>Ticket</th><th>Wait ms</th><th>Pending</th></tr></thead>
+              <tbody id="queueBody"><tr><td colspan="5">Idle. Start the broker on a Mac to fill this table.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pane" id="pane-identity">
+            <h2>Identity</h2>
+            <p class="lede">assert_bound opens a fixture path only as a name, then binds on serial / PARTUUID / FS-UUID. The Mac UI never opens host /dev.</p>
+            <div class="row">
+              <button type="button" onclick="bindExample()">Bind example identity</button>
+              <button type="button" onclick="run(['scan','--root','.','--json'], 'scan')">Scan tree</button>
+            </div>
+            <pre id="bindJSON"></pre>
+            <pre id="scanJSON"></pre>
+          </div>
+          <div class="pane" id="pane-retain">
+            <h2>Retain</h2>
+            <p class="lede">There is no deletion bucket. Disposable sessions and broker.jsonl stay on disk. This app never empties, trashes, or unlinks them.</p>
+            <div class="row">
+              <button type="button" onclick="listSessions()">Refresh list</button>
+              <button type="button" onclick="newSession()">New session</button>
+            </div>
+            <table>
+              <thead><tr><th>Session</th><th>Source</th><th></th></tr></thead>
+              <tbody id="retainBody"><tr><td colspan="3">No retained sessions in this parent yet.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pane" id="pane-topology">
+            <h2>Topology</h2>
+            <p class="lede">Read-only observation of the source directory’s backing disk via df/diskutil. Refused for /Volumes and /dev.</p>
+            <div class="row"><button type="button" onclick="topology()">Resolve source topology</button></div>
+            <pre id="topologyJSON">Run this on a Mac after creating a session. Linux hosts will report topology unavailable.</pre>
+          </div>
+          <div class="pane" id="pane-doctor">
+            <h2>Doctor</h2>
+            <p class="lede">Checks macOS, FUSE-T, the broker binary, and Swift. Does not mount and does not open /dev.</p>
+            <div class="row">
+              <button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh</button>
+              <button type="button" onclick="run(['setup','--json'], 'setup')">Run setup</button>
+              <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify install</button>
+            </div>
+            <div class="checks" id="doctorChecks"></div>
+            <pre id="doctorJSON"></pre>
+          </div>
+        </section>
+      </div>
+      <div class="busy" id="busy"><div class="pill">Working…</div></div>
+    </div>
+    <p class="caption">Live preview of SpindleGuard.app — same controls as the SwiftUI app, driving the real <code>sg</code> CLI. Compile the Mac bundle with <code>./sg setup</code> on macOS.</p>
+  </div>
+</div>
+<script>
+const PANES = ["Setup","Broker","Queue","Identity","Retain","Topology","Doctor"];
+const state = { pane: "setup", source: "", mount: "", log: "", prefix: "/Workspace", fuse: "brew install macos-fuse-t/homebrew-cask/fuse-t", status: "Run Setup, then create a disposable session." };
+function $(id){ return document.getElementById(id); }
+function setBusy(on){ $("busy").classList.toggle("on", on); }
+function showPane(name){
+  state.pane = name;
+  document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-"+name));
+  document.querySelectorAll(".nav").forEach(b => b.classList.toggle("active", b.dataset.pane === name));
+  if(name === "retain") listSessions();
+}
+function renderSidebar(){
+  $("sidebar").innerHTML = PANES.map(p => {
+    const id = p.toLowerCase();
+    return `<button class="nav${id===state.pane?" active":""}" data-pane="${id}" type="button" onclick="showPane('${id}')">${p}</button>`;
+  }).join("");
+}
+function renderChecks(target, checks){
+  $(target).innerHTML = (checks||[]).map(c => `<div class="check"><div class="mark ${c.ok?"":"bad"}">${c.ok?"●":"○"}</div><div><div>${c.label}</div>${!c.ok && c.fix?`<p class="fix">${c.fix}</p>`:""}</div></div>`).join("");
+}
+function setStatus(text){
+  state.status = text;
+  $("setupStatus").textContent = text;
+  $("brokerStatus").textContent = text;
+  $("extraStatus").textContent = text;
+}
+async function run(argv, sink){
+  setBusy(true);
+  try {
+    const res = await fetch("/api/sg", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({argv}) });
+    const body = await res.json();
+    const data = body.data;
+    if(sink === "doctor" && data){
+      renderChecks("setupChecks", data.checks);
+      renderChecks("doctorChecks", data.checks);
+      $("doctorJSON").textContent = JSON.stringify(data, null, 2);
+      $("modeLabel").textContent = data.can_mount ? "Idle" : "Setup";
+      $("extraStatus").textContent = data.can_mount ? "Idle" : "Setup needed";
+      if(data.fuse_install) state.fuse = data.fuse_install;
+    }
+    if(sink === "setup") $("setupJSON").textContent = JSON.stringify(data, null, 2);
+    if(sink === "verify") $("verifyJSON").textContent = JSON.stringify(data, null, 2);
+    if(sink === "scan") $("scanJSON").textContent = JSON.stringify(data, null, 2);
+    if(sink === "bind") $("bindJSON").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    if(body.ok) setStatus(sink + " finished.");
+    else setStatus(body.error || body.stderr || (sink + " failed"));
+    return body;
+  } catch (err) {
+    setStatus(String(err));
+  } finally {
+    setBusy(false);
+  }
+}
+async function newSession(){
+  const body = await run(["session-create","--json"], "session");
+  if(body && body.ok && body.data){
+    $("source").value = state.source = body.data.source;
+    $("mount").value = state.mount = body.data.mount;
+    $("logPath").value = state.log = body.data.log;
+    $("prefix").value = state.prefix = body.data.write_prefix || "/Workspace";
+    setStatus("Session retained at " + body.data.session + ". Files are not deleted.");
+    showPane("broker");
+  }
+}
+async function listSessions(){
+  const body = await run(["session-list","--json"], "retain");
+  const rows = (body && body.data && body.data.sessions) || [];
+  $("retainBody").innerHTML = rows.length ? rows.map(s => {
+    const file = s.session + "/session.json";
+    return `<tr><td>${s.session}</td><td>${s.source}</td><td><button type="button" data-file="${file.replace(/"/g, "")}">Load</button></td></tr>`;
+  }).join("") : `<tr><td colspan="3">No retained sessions in this parent yet.</td></tr>`;
+  $("retainBody").querySelectorAll("button[data-file]").forEach(btn => {
+    btn.addEventListener("click", () => loadSession(btn.getAttribute("data-file")));
+  });
+}
+async function loadSession(file){
+  const body = await run(["session-load","--file", file, "--json"], "session");
+  if(body && body.ok && body.data){
+    $("source").value = state.source = body.data.source;
+    $("mount").value = state.mount = body.data.mount;
+    $("logPath").value = state.log = body.data.log;
+    showPane("broker");
+  }
+}
+async function policyCheck(){
+  const body = await run(["policy-check","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--json"], "policy");
+  $("policyJSON").textContent = JSON.stringify(body && body.data, null, 2);
+}
+async function previewStart(){
+  const body = await run(["start","--dry-run","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start");
+  $("policyJSON").textContent = JSON.stringify(body && body.data, null, 2);
+}
+async function bindExample(){
+  await run(["bind","--manifest","macos/Resources/example-manifest.json","--path","/dev/sda1","--fixture","macos/Resources/example-fixture.json"], "bind");
+}
+async function topology(){
+  const body = await run(["topology","--path",$("source").value || "/tmp"], "topology");
+  $("topologyJSON").textContent = (body && (body.data || body.stderr || body.error)) || "";
+}
+function copyFuse(){ navigator.clipboard.writeText(state.fuse); setStatus("Copied: " + state.fuse); }
+function toggleExtra(){ $("extraMenu").classList.toggle("open"); $("extraBtn").classList.toggle("open"); }
+function tick(){ const d=new Date(); $("clock").textContent = d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
+renderSidebar();
+showPane("setup");
+tick();
+setInterval(tick, 1000);
+setStatus(state.status);
+run(["doctor","--json"], "doctor");
+</script>
+</body>
+</html>

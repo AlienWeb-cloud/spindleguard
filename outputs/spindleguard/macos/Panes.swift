@@ -298,6 +298,39 @@ struct IdentityPane: View {
     }
 }
 
+struct RetainPane: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Retain")
+                .font(.title2.weight(.semibold))
+            Text("There is no deletion bucket. Disposable sessions and broker.jsonl stay on disk. This app never empties, trashes, or unlinks them.")
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Refresh list") { state.listSessions() }
+                Button("New session") { state.newSession() }
+                Button("Open parent") { state.openSessionParent() }
+                    .disabled(state.sessionParentPath.isEmpty)
+            }
+            .disabled(state.busy)
+            if state.sessions.isEmpty {
+                Text("No retained sessions in this parent yet.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Table(state.sessions) {
+                    TableColumn("Session") { row in Text(row.session).font(.caption.monospaced()) }
+                    TableColumn("Source") { row in Text(row.source).font(.caption.monospaced()) }
+                    TableColumn("") { row in
+                        Button("Load") { state.loadListedSession(row) }
+                    }
+                }
+            }
+            StatusBanner()
+        }
+    }
+}
+
 struct TopologyPane: View {
     @EnvironmentObject var state: AppState
 

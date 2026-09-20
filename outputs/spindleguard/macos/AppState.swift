@@ -11,6 +11,14 @@ struct SetupCheck: Identifiable, Hashable {
     let fix: String
 }
 
+struct SessionInfo: Identifiable, Hashable {
+    let id: String
+    let session: String
+    let source: String
+    let mount: String
+    let log: String
+}
+
 @MainActor
 final class AppState: ObservableObject {
     enum Pane: String, CaseIterable, Identifiable, Hashable {
@@ -18,6 +26,7 @@ final class AppState: ObservableObject {
         case broker = "Broker"
         case queue = "Queue"
         case identity = "Identity"
+        case retain = "Retain"
         case topology = "Topology"
         case doctor = "Doctor"
         var id: String { rawValue }
@@ -66,6 +75,7 @@ final class AppState: ObservableObject {
     @Published var fuseDocs: String = "https://github.com/macos-fuse-t/fuse-t"
     @Published var nextActions: [String] = []
     @Published var checks: [SetupCheck] = []
+    @Published var sessions: [SessionInfo] = []
 
     private let broker = BrokerService()
     private var lineBuffer = ""
@@ -92,6 +102,7 @@ final class AppState: ObservableObject {
             }
         }
         refreshDoctor()
+        listSessions()
     }
 
     var policyProblem: String? {
@@ -175,6 +186,7 @@ final class AppState: ObservableObject {
             self.status = "Session retained at \(obj["session"] as? String ?? ""). Files are not deleted."
             self.events = []
             self.retainedLog = ""
+            self.listSessions()
             self.pane = .broker
         }
     }
@@ -185,9 +197,49 @@ final class AppState: ObservableObject {
             self.runSG(arguments: ["session-load", "--file", path, "--json"]) { data in
                 guard let obj = data as? [String: Any] else { return }
                 self.applySession(obj)
-                self.status = "Loaded retained session."
+                self.status = "Loaded retained session. There is no deletion bucket."
                 self.pane = .broker
             }
+        }
+    }
+
+    func listSessions() {
+        let parent = sessionParentPath.isEmpty ? SGPaths.sessionParent().path : sessionParentPath
+        if let err = PathPolicy.forbidden(parent) {
+            error = err
+            return
+        }
+        runSG(arguments: ["session-list", "--parent", parent, "--json"]) { data in
+            guard let obj = data as? [String: Any] else { return }
+            let raw = obj["sessions"] as? [[String: Any]] ?? []
+            self.sessions = raw.compactMap { item in
+                guard let session = item["session"] as? String else { return nil }
+                return SessionInfo(
+                    id: session,
+                    session: session,
+                    source: item["source"] as? String ?? "",
+                    mount: item["mount"] as? String ?? "",
+                    log: item["log"] as? String ?? ""
+                )
+            }
+        }
+    }
+
+    func loadListedSession(_ row: SessionInfo) {
+        error = ""
+        let file = URL(fileURLWithPath: row.session).appendingPathComponent("session.json").path
+        runSG(arguments: ["session-load", "--file", file, "--json"]) { data in
+            guard let obj = data as? [String: Any] else { return }
+            self.applySession(obj)
+            self.status = "Loaded retained session. There is no deletion bucket."
+            self.pane = .broker
+        }
+    }
+
+    func showMainWindow() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        if let window = NSApplication.shared.windows.first(where: { $0.canBecomeMain }) {
+            window.makeKeyAndOrderFront(nil)
         }
     }
 

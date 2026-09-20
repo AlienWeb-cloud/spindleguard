@@ -29,6 +29,7 @@ struct ContentView: View {
                     case .broker: BrokerPane()
                     case .queue: QueuePane()
                     case .identity: IdentityPane()
+                    case .retain: RetainPane()
                     case .topology: TopologyPane()
                     case .doctor: DoctorPane()
                     }
@@ -127,6 +128,7 @@ struct ContentView: View {
         case .broker: return "externaldrive"
         case .queue: return "list.bullet.rectangle"
         case .identity: return "checkmark.shield"
+        case .retain: return "archivebox"
         case .topology: return "point.3.connected.trianglepath.dotted"
         case .doctor: return "stethoscope"
         }

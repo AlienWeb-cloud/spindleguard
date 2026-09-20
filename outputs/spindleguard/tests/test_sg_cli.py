@@ -33,7 +33,9 @@ class SgCliTests(unittest.TestCase):
         self.assertIn("session-load", result.stdout)
         self.assertIn("setup", result.stdout)
         self.assertIn("verify", result.stdout)
+        self.assertIn("session-list", result.stdout)
         self.assertIn("unmount", result.stdout)
+        self.assertIn("ui", result.stdout)
 
     def test_missing_subcommand_example(self):
         result = run_sg()

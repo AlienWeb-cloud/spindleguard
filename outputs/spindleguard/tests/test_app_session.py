@@ -30,6 +30,7 @@ class SessionTests(unittest.TestCase):
             loaded = load_session(Path(record["session"]) / "session.json")
             self.assertEqual(loaded["source"], record["source"])
             self.assertTrue(loaded["retained"])
+            self.assertFalse(record["deletion_bucket"])
 
     def test_refuses_volumes_parent(self):
         with self.assertRaises(PolicyError):

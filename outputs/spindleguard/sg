@@ -36,7 +36,7 @@ from sgcontrol.broker import broker_command
 from sgcontrol.doctor import FUSE_INSTALL, doctor
 from sgcontrol.events import competing_wait, load_events, queue_snapshot
 from sgcontrol.policy import PolicyError, check, check_observe_path
-from sgcontrol.session import create_session, default_parent, load_session
+from sgcontrol.session import create_session, default_parent, list_sessions, load_session
 from sgcontrol.setup import setup
 from sgcontrol.verify import verify_full, verify_quick
 
@@ -78,6 +78,18 @@ def cmd_session_load(args: argparse.Namespace) -> int:
         print("  ./sg session-load --file DIR/session.json --json", file=sys.stderr)
         return 2
     _out(record, True)
+    return 0
+
+
+def cmd_session_list(args: argparse.Namespace) -> int:
+    parent = Path(args.parent) if args.parent else default_parent(ROOT)
+    try:
+        payload = list_sessions(parent)
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-list --parent ./work --json", file=sys.stderr)
+        return 2
+    _out(payload, True)
     return 0
 
 
@@ -262,6 +274,16 @@ def cmd_unmount(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    from sgcontrol.ui import serve_preview
+    try:
+        return serve_preview(ROOT, host=args.host, port=args.port, open_browser=args.open)
+    except (PolicyError, OSError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg ui --host 127.0.0.1 --port 8765", file=sys.stderr)
+        return 2
+
+
 def cmd_app(args: argparse.Namespace) -> int:
     bundle = ROOT / "SpindleGuard.app"
     payload = {
@@ -306,6 +328,11 @@ def build_parser() -> argparse.ArgumentParser:
     sl.add_argument("--file", help="path to session.json")
     sl.add_argument("--json", action="store_true")
     sl.set_defaults(func=cmd_session_load)
+
+    ls = sub.add_parser("session-list", help="list retained sessions; never deletes")
+    ls.add_argument("--parent", help="parent directory (default: <project>/work)")
+    ls.add_argument("--json", action="store_true")
+    ls.set_defaults(func=cmd_session_list)
 
     p = sub.add_parser("policy-check", help="refuse /Volumes, /dev, nested, unmarked trees")
     p.add_argument("--source")
@@ -380,6 +407,12 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--dry-run", action="store_true")
     u.add_argument("--json", action="store_true")
     u.set_defaults(func=cmd_unmount)
+
+    ui = sub.add_parser("ui", help="open a local preview of the native app (127.0.0.1)")
+    ui.add_argument("--host", default="127.0.0.1")
+    ui.add_argument("--port", type=int, default=8765)
+    ui.add_argument("--open", action="store_true", help="open the preview in a browser")
+    ui.set_defaults(func=cmd_ui)
 
     return parser
 

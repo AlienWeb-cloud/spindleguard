@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
+import AppKit
 
 @main
 struct SpindleGuardApp: App {
@@ -58,13 +59,37 @@ struct SpindleGuardApp: App {
                 Button("Resolve Topology") { state.runTopology() }
                     .disabled(state.source.isEmpty)
                 Button("Rotate Manifest") { state.rotateManifest() }
+                Divider()
+                Button("List Retained Sessions") {
+                    state.listSessions()
+                    state.pane = .retain
+                }
             }
+        }
+        MenuBarExtra("SpindleGuard", systemImage: "externaldrive") {
+            Text(state.running ? "Mounted" : (state.canMount ? "Idle" : "Setup needed"))
+            Text(state.status)
+                .foregroundStyle(.secondary)
+            Divider()
+            Button("Show SpindleGuard") { state.showMainWindow() }
+            Button("New Disposable Session") { state.newSession() }
+            Button(state.running ? "Stop Broker" : "Start Broker") {
+                state.running ? state.stop() : state.start()
+            }
+            Button("Verify Install") { state.verifyInstall() }
+            Button("Retained Sessions") {
+                state.showMainWindow()
+                state.listSessions()
+                state.pane = .retain
+            }
+            Divider()
+            Button("Quit SpindleGuard") { NSApplication.shared.terminate(nil) }
         }
         Settings {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SpindleGuard is a test-only prototype.")
                     .font(.headline)
-                Text("It does not protect evidence drives or confine agents. Source and mount under /Volumes or /dev are refused. Session files are retained.")
+                Text("It does not protect evidence drives or confine agents. Source and mount under /Volumes or /dev are refused. Session files are retained. There is no deletion bucket.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 360, alignment: .leading)
                 Text("Session parent")

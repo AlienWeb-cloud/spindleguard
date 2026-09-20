@@ -157,6 +157,32 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(body["source"], rec["source"])
             self.assertTrue(body["retained"])
 
+    def test_session_list_has_no_deletion_bucket(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            created = run_sg("session-create", "--parent", tmp, "--json")
+            rec = json.loads(created.stdout)
+            listed = run_sg("session-list", "--parent", tmp, "--json")
+            self.assertEqual(listed.returncode, 0, listed.stderr)
+            payload = json.loads(listed.stdout)
+            self.assertFalse(payload["deletion_buckets"])
+            self.assertFalse(payload["deletes"])
+            self.assertEqual(payload["sessions"][0]["session"], rec["session"])
+
+    def test_preview_refuses_dangerous_argv(self):
+        from sgcontrol.policy import PolicyError
+        from sgcontrol.ui import _validate_argv
+
+        with self.assertRaises(PolicyError):
+            _validate_argv(["setup", "--install-fuse", "--yes"])
+        with self.assertRaises(PolicyError):
+            _validate_argv(["verify", "--full"])
+        with self.assertRaises(PolicyError):
+            _validate_argv(["start", "--source", "/tmp/a", "--mount", "/tmp/b"])
+        with self.assertRaises(PolicyError):
+            _validate_argv(["topology", "--path", "/Volumes/exhibit"])
+        _validate_argv(["setup", "--dry-run", "--json"])
+        _validate_argv(["start", "--dry-run", "--source", "/tmp/a", "--mount", "/tmp/b"])
+
     def test_session_load_volumes(self):
         result = run_sg("session-load", "--file", "/Volumes/exhibit/session.json")
         self.assertEqual(result.returncode, 2)

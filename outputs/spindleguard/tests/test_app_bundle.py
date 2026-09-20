@@ -56,7 +56,8 @@ class AppBundleTests(unittest.TestCase):
             "func previewStart()",
             "func copyFuseCommand()",
             "func openFuseDocs()",
-            "func revealLog()",
+            "func listSessions()",
+            "func showMainWindow()",
         ):
             self.assertIn(needle, state)
         self.assertIn('["setup", "--json"]', state)
@@ -67,6 +68,8 @@ class AppBundleTests(unittest.TestCase):
         )
         panes = (MACOS / "Panes.swift").read_text(encoding="utf-8")
         self.assertIn("struct SetupPane", panes)
+        self.assertIn("struct RetainPane", panes)
+        self.assertIn("There is no deletion bucket", panes)
         self.assertIn("Run setup", panes)
         self.assertIn("Verify install", panes)
         self.assertIn("Copy FUSE-T command", panes)
@@ -77,22 +80,31 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("Preview start", panes)
         content = (MACOS / "ContentView.swift").read_text(encoding="utf-8")
         self.assertIn("case .setup: SetupPane()", content)
+        self.assertIn("case .retain: RetainPane()", content)
         self.assertIn('Button("Verify Install"', content)
         app = (MACOS / "SpindleGuardApp.swift").read_text(encoding="utf-8")
         self.assertIn('Button("Start")', app)
         self.assertIn('Button("Stop")', app)
         self.assertIn('CommandMenu("Setup")', app)
+        self.assertIn("MenuBarExtra", app)
+        self.assertIn('systemImage: "externaldrive"', app)
         self.assertIn("import UniformTypeIdentifiers", state)
         self.assertIn("sessionParent()", (MACOS / "SGPaths.swift").read_text(encoding="utf-8"))
         self.assertIn("func unmount(mount: String)", (MACOS / "BrokerService.swift").read_text(encoding="utf-8"))
 
-    def test_info_plist(self):
+    def test_preview_html_mirrors_native_chrome(self):
+        page = (MACOS / "preview.html").read_text(encoding="utf-8")
+        self.assertIn("SpindleGuard", page)
+        self.assertIn("There is no deletion bucket", page)
+        self.assertIn('id="extraBtn"', page)
+        self.assertIn("New Session", page)
+        self.assertIn("Retain", page)
         info = plistlib.loads((MACOS / "Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "cloud.alienweb.spindleguard")
         self.assertEqual(info["CFBundleExecutable"], "SpindleGuard")
         self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
-        self.assertEqual(info["CFBundleShortVersionString"], "0.4")
-        self.assertEqual(info["CFBundleVersion"], "4")
+        self.assertEqual(info["CFBundleShortVersionString"], "0.5")
+        self.assertEqual(info["CFBundleVersion"], "5")
         self.assertFalse(info["NSSupportsAutomaticTermination"])
 
     def test_make_app_requires_macos(self):
@@ -120,7 +132,7 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("python3 -B ./sg setup", makefile)
         self.assertIn("python3 -B ./sg verify --quick", makefile)
         self.assertIn("verify --full", makefile)
-        self.assertIn("broker helper not built yet", makefile)
+        self.assertIn("macos/preview.html", makefile)
 
 
 if __name__ == "__main__":

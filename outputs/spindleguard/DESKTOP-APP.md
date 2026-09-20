@@ -54,6 +54,7 @@ is not writable, sessions are created under
 | Broker | New/load session, source/mount pickers, write prefix, delay, start, stop, unmount, policy-check, start dry-run, Finder, reveal log |
 | Queue | Live JSONL from the broker stderr; concurrent read probe; reveal log |
 | Identity | Example fixture bind, JSON pickers, tree scan, logged manifest rotation (dry-run default) |
+| Retain | List retained sessions. There is **no deletion bucket**; nothing is emptied or unlinked |
 | Topology | `sg topology --path SOURCE` after /Volumes and /dev refusal |
 | Doctor | Same checklist, setup, verify, FUSE-T command copy |
 
@@ -62,7 +63,17 @@ when doctor says the host can mount. Stop calls `/sbin/umount` then
 terminates the process. Session files are never deleted.
 
 Every `sg` subcommand that the prototype exposes is reachable from a
-button, the Control menu, or the Setup/Broker/Control command menus.
+button, the Control menu, the Setup/Broker/Control command menus, or the
+**menu bar extra** (the SpindleGuard disk icon in the macOS menu bar).
+
+A loopback preview of the same chrome is available without compiling Swift:
+
+```
+./sg ui --port 8765
+```
+
+It binds `127.0.0.1` only and refuses FUSE install, `verify --full`, and
+non-dry-run start/unmount.
 
 ## What it will not do
 
