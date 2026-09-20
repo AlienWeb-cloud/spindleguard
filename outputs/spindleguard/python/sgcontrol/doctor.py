@@ -62,7 +62,7 @@ def doctor(project_root: Path) -> dict[str, Any]:
         _check("swiftc", bool(swiftc), "swiftc (native app)", CLT_INSTALL),
         _check("brew", bool(brew) or not darwin, "Homebrew (FUSE-T install)", "https://brew.sh"),
         _check("broker", broker is not None, "broker binary", "./sg setup  or  make"),
-        _check("app", app_bundle or not darwin, "SpindleGuard.app", "make app"),
+        _check("app", app_bundle, "SpindleGuard.app", "./sg setup  or  make app"),
     ]
     problems = []
     if not darwin:
