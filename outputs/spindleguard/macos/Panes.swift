@@ -304,58 +304,70 @@ struct RetainPane: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Retain")
-                .font(.title2.weight(.semibold))
-            Text("Active sessions stay on disk. Move one to the deletion bucket, then restore it or purge it. Purge only deletes ui-session directories already in the bucket, and only after you confirm. /Volumes and /dev are refused.")
-                .foregroundStyle(.secondary)
-            HStack {
-                Button("Refresh list") { state.listSessions() }
-                Button("New session") { state.newSession() }
-                Button("Move current to bucket") { state.bucketCurrentSession() }
-                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed)
-                Button("Empty bucket…") { state.purgeBucket() }
-                    .disabled(state.bucket.isEmpty)
-                Button("Open parent") { state.openSessionParent() }
-                    .disabled(state.sessionParentPath.isEmpty)
-            }
-            .disabled(state.busy)
-            Text("Active")
-                .font(.headline)
-            if state.sessions.isEmpty {
-                Text("No retained sessions in this parent yet.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Retain")
+                    .font(.title2.weight(.semibold))
+                Text("Three lists. Active is usable. Bucket is recycle. Purged still has files until you destroy them. Destroy only deletes ui-session directories already in the purged list, after confirm. /Volumes and /dev are refused.")
                     .foregroundStyle(.secondary)
-            } else {
-                Table(state.sessions) {
-                    TableColumn("Session") { row in Text(row.session).font(.caption.monospaced()) }
-                    TableColumn("Source") { row in Text(row.source).font(.caption.monospaced()) }
-                    TableColumn("") { row in
-                        HStack {
-                            Button("Load") { state.loadListedSession(row) }
-                            Button("Bucket") { state.bucketSession(row) }
-                        }
+                HStack {
+                    Button("Refresh list") { state.listSessions() }
+                    Button("New session") { state.newSession() }
+                    Button("Move current to bucket") { state.bucketCurrentSession() }
+                        .disabled(state.sessionRoot.isEmpty || state.sessionBucketed || state.sessionPurged)
+                    Button("Purge bucket") { state.purgeBucket() }
+                        .disabled(state.bucket.isEmpty)
+                    Button("Empty purged…") { state.destroyPurged() }
+                        .disabled(state.purged.isEmpty)
+                    Button("Open parent") { state.openSessionParent() }
+                        .disabled(state.sessionParentPath.isEmpty)
+                }
+                .disabled(state.busy)
+                listBlock("Active", rows: state.sessions, empty: "No active sessions in this parent yet.") { row in
+                    HStack {
+                        Button("Load") { state.loadListedSession(row) }
+                        Button("Bucket") { state.bucketSession(row) }
                     }
                 }
-            }
-            Text("Deletion bucket")
-                .font(.headline)
-            if state.bucket.isEmpty {
-                Text("Bucket is empty.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Table(state.bucket) {
-                    TableColumn("Session") { row in Text(row.session).font(.caption.monospaced()) }
-                    TableColumn("Source") { row in Text(row.source).font(.caption.monospaced()) }
-                    TableColumn("") { row in
-                        HStack {
-                            Button("Load") { state.loadListedSession(row) }
-                            Button("Restore") { state.restoreSession(row) }
-                            Button("Purge…") { state.purgeSession(row) }
-                        }
+                listBlock("Bucket", rows: state.bucket, empty: "Bucket is empty.") { row in
+                    HStack {
+                        Button("Load") { state.loadListedSession(row) }
+                        Button("Restore") { state.restoreSession(row) }
+                        Button("Purge") { state.purgeSession(row) }
                     }
                 }
+                listBlock("Purged", rows: state.purged, empty: "Purged list is empty.") { row in
+                    HStack {
+                        Button("Load") { state.loadListedSession(row) }
+                        Button("Restore") { state.restoreSession(row) }
+                        Button("Destroy…") { state.destroySession(row) }
+                    }
+                }
+                StatusBanner()
             }
-            StatusBanner()
+        }
+    }
+
+    private func listBlock<Actions: View>(
+        _ title: String,
+        rows: [SessionInfo],
+        empty: String,
+        @ViewBuilder actions: @escaping (SessionInfo) -> Actions
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+            if rows.isEmpty {
+                Text(empty)
+                    .foregroundStyle(.secondary)
+            } else {
+                Table(rows) {
+                    TableColumn("Session") { row in Text(row.session).font(.caption.monospaced()) }
+                    TableColumn("Source") { row in Text(row.source).font(.caption.monospaced()) }
+                    TableColumn("") { row in actions(row) }
+                }
+                .frame(minHeight: 88)
+            }
         }
     }
 }
@@ -460,7 +472,7 @@ struct StatusBanner: View {
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
             }
-            Text("Session files and broker.jsonl are retained. This app does not delete.")
+            Text("Active → bucket → purged. Destroy only from the purged list, with confirm.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

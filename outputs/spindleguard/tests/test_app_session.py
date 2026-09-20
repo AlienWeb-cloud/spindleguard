@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Disposable UI sessions. Uses a temp parent. Purge is bucket-only."""
+"""Disposable UI sessions. Three lists: active, bucket, purged."""
 from __future__ import annotations
 
 import sys
@@ -11,7 +11,18 @@ PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT / "python"))
 
 from sgcontrol.policy import MARKER_NAME, PolicyError, VOLUMES_MSG, check
-from sgcontrol.session import create_session, load_session, bucket_session, restore_session, purge_sessions, list_sessions
+from sgcontrol.session import (
+    MSG_DESTROY_YES,
+    MSG_NOT_IN_BUCKET,
+    MSG_NOT_PURGED,
+    bucket_session,
+    create_session,
+    destroy_sessions,
+    list_sessions,
+    load_session,
+    purge_sessions,
+    restore_session,
+)
 
 
 class SessionTests(unittest.TestCase):
@@ -31,20 +42,24 @@ class SessionTests(unittest.TestCase):
             self.assertEqual(loaded["source"], record["source"])
             self.assertTrue(loaded["retained"])
             self.assertFalse(record["deletion_bucket"])
+            self.assertFalse(record["purged"])
             listed = list_sessions(Path(tmp))
             self.assertTrue(listed["deletion_buckets"])
             self.assertEqual(listed["bucket"], [])
+            self.assertEqual(listed["purged"], [])
 
-    def test_bucket_restore_purge(self):
+    def test_bucket_purge_destroy_three_lists(self):
         with tempfile.TemporaryDirectory() as tmp:
             parent = Path(tmp)
             record = create_session(parent)
             session = Path(record["session"])
-            with self.assertRaises(PolicyError):
-                purge_sessions(parent, session, yes=False)
+            with self.assertRaises(PolicyError) as cm:
+                purge_sessions(parent, session)
+            self.assertEqual(str(cm.exception), MSG_NOT_IN_BUCKET)
             self.assertTrue(session.is_dir())
             moved = bucket_session(parent, session)
             self.assertTrue(moved["deletion_bucket"])
+            self.assertFalse(moved["purged"])
             self.assertFalse(session.exists())
             bucketed = Path(moved["session"])
             self.assertTrue(bucketed.is_dir())
@@ -52,14 +67,50 @@ class SessionTests(unittest.TestCase):
             self.assertTrue(loaded["deletion_bucket"])
             restored = restore_session(parent, bucketed)
             self.assertFalse(restored["deletion_bucket"])
+            self.assertFalse(restored["purged"])
             live = Path(restored["session"])
             self.assertTrue(live.is_dir())
             bucket_session(parent, live)
             listed = list_sessions(parent)
             target = Path(listed["bucket"][0]["session"])
-            purged = purge_sessions(parent, target, yes=True)
+            with self.assertRaises(PolicyError) as cm:
+                destroy_sessions(parent, target, yes=True)
+            self.assertEqual(str(cm.exception), MSG_NOT_PURGED)
+            self.assertTrue(target.is_dir())
+            purged = purge_sessions(parent, target)
             self.assertEqual(purged["count"], 1)
+            self.assertTrue(purged["purged"])
+            self.assertFalse(purged["deletion_bucket"])
+            self.assertEqual(purged["lane"], "purged")
             self.assertFalse(target.exists())
+            listed = list_sessions(parent)
+            self.assertEqual(listed["bucket"], [])
+            self.assertEqual(len(listed["purged"]), 1)
+            purged_dir = Path(listed["purged"][0]["session"])
+            self.assertTrue(purged_dir.is_dir())
+            self.assertTrue((purged_dir / "source" / MARKER_NAME).is_file())
+            loaded = load_session(purged_dir / "session.json")
+            self.assertTrue(loaded["purged"])
+            self.assertFalse(loaded["deletion_bucket"])
+            with self.assertRaises(PolicyError) as cm:
+                destroy_sessions(parent, purged_dir, yes=False)
+            self.assertEqual(str(cm.exception), MSG_DESTROY_YES)
+            self.assertTrue(purged_dir.is_dir())
+            restored = restore_session(parent, purged_dir)
+            self.assertTrue(restored["deletion_bucket"])
+            self.assertFalse(restored["purged"])
+            bucketed = Path(restored["session"])
+            self.assertTrue(bucketed.is_dir())
+            purge_sessions(parent, bucketed)
+            listed = list_sessions(parent)
+            final = Path(listed["purged"][0]["session"])
+            gone = destroy_sessions(parent, final, yes=True)
+            self.assertEqual(gone["count"], 1)
+            self.assertFalse(final.exists())
+            empty = list_sessions(parent)
+            self.assertEqual(empty["sessions"], [])
+            self.assertEqual(empty["bucket"], [])
+            self.assertEqual(empty["purged"], [])
 
     def test_refuses_volumes_parent(self):
         with self.assertRaises(PolicyError):

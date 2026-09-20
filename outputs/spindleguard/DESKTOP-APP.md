@@ -54,15 +54,16 @@ is not writable, sessions are created under
 | Broker | New/load session, source/mount pickers, write prefix, delay, start, stop, unmount, policy-check, start dry-run, Finder, reveal log |
 | Queue | Live JSONL from the broker stderr; concurrent read probe; reveal log |
 | Identity | Example fixture bind, JSON pickers, tree scan, logged manifest rotation (dry-run default) |
-| Retain | List retained sessions, move to the **deletion bucket**, restore, or purge (`--yes`). Purge does not delete active sessions |
+| Retain | Three lists: **Active**, **Bucket**, **Purged**. Active is usable. Bucket is recycle. Purged still has files. Restore is one step (purged→bucket, or bucket→active). Destroy unlinks only purged `ui-session-*` directories, after confirm/`--yes` |
 | Topology | `sg topology --path SOURCE` after `/Volumes` and `/dev` refusal |
 | Doctor | Same checklist, setup, verify, FUSE-T command copy |
 
 Start runs `PathPolicy` in Swift, then execs `Contents/Helpers/spindleguard`
 when doctor says the host can mount. Stop calls `/sbin/umount` then
 terminates the process. Active sessions stay on disk until you move them
-into `<parent>/bucket/` and purge. Purge requires confirm/`--yes` and
-only deletes `ui-session-*` directories already in that bucket.
+into `<parent>/bucket/`, then into `<parent>/purged/`. Destroy requires
+confirm/`--yes` and only deletes `ui-session-*` directories already in
+the purged list. Active and bucketed sessions are not unlinked.
 
 Every `sg` subcommand that the prototype exposes is reachable from a
 button, the Control menu, the Setup/Broker/Control command menus, or the
@@ -86,8 +87,8 @@ A loopback preview of the same chrome is available without compiling Swift:
 ```
 
 It binds `127.0.0.1` only and refuses FUSE install, `verify --full`, and
-non-dry-run start/unmount. Session purge is allowed with `--yes` and only
-targets bucketed `ui-session-*` directories.
+non-dry-run start/unmount. Preview `--yes` is allowed only for
+`session-destroy`, which unlinks purged `ui-session-*` directories.
 
 ## What it will not do
 
@@ -109,7 +110,8 @@ replace a review of unpublished local desktop code.
 ./sg session-list --parent ./work --json
 ./sg session-bucket --session ./work/ui-session-* --json
 ./sg session-restore --session ./work/bucket/ui-session-* --json
-./sg session-purge --session ./work/bucket/ui-session-* --yes --json
+./sg session-purge --session ./work/bucket/ui-session-* --json
+./sg session-destroy --session ./work/purged/ui-session-* --yes --json
 ./sg ui --port 8765
 ./sg start --dry-run --source DIR --mount DIR --write-prefix /Workspace --delay-ms 150 --json
 ./sg unmount --mount DIR --dry-run

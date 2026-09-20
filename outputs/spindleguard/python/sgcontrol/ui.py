@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Loopback preview of the native app. Does not mount or open /dev.
 
-Purge only deletes bucketed ui-session directories under the session parent.
+Purge moves bucketed sessions into the purged list. Destroy unlinks only
+purged ui-session directories under the session parent.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ ALLOWED_COMMANDS = {
     "session-bucket",
     "session-restore",
     "session-purge",
+    "session-destroy",
     "policy-check",
     "start",
     "unmount",
@@ -49,10 +51,10 @@ def _validate_argv(argv: list[str]) -> None:
     for flag in BLOCKED_FLAGS:
         if flag in argv:
             raise PolicyError(f"preview refuses {flag}")
-    if "--yes" in argv and command != "session-purge":
+    if "--yes" in argv and command != "session-destroy":
         raise PolicyError("preview refuses --yes")
-    if command == "session-purge" and "--yes" not in argv and "--dry-run" not in argv:
-        raise PolicyError("preview purge requires --yes")
+    if command == "session-destroy" and "--yes" not in argv and "--dry-run" not in argv:
+        raise PolicyError("preview destroy requires --yes")
     if command == "start" and "--dry-run" not in argv:
         raise PolicyError("preview start requires --dry-run")
     if command == "unmount" and "--dry-run" not in argv:

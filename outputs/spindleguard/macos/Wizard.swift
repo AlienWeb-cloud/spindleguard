@@ -51,7 +51,7 @@ struct SetupWizard: View {
                 Text("Welcome")
                     .font(.headline)
                 Text("SpindleGuard is a test-only prototype. It does not protect evidence drives or confine agents.")
-                Text("It refuses /Volumes and /dev. Active sessions stay on disk until you move them to the deletion bucket and purge.")
+                Text("It refuses /Volumes and /dev. Three lists: active, bucket, and purged. Destroy only deletes from the purged list.")
                 Text("This wizard checks the Mac, optionally installs FUSE-T (only if you confirm), builds the broker and this app, verifies the install, then can create a disposable session.")
                     .foregroundStyle(.secondary)
                 Text("Skip stores that you have seen this wizard so it does not open again. You can reopen it from Setup or the menu extra.")
@@ -119,7 +119,7 @@ struct SetupWizard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Disposable session")
                     .font(.headline)
-                Text("Creates a retained source and mount under the session parent. Files stay until you bucket and purge them. After Finish you can Start from Broker when this Mac can mount.")
+                Text("Creates a retained source and mount under the session parent. Files stay on Active until you bucket, purge, then destroy them.")
                     .foregroundStyle(.secondary)
                 Button("New disposable session") { state.newSession() }
                     .disabled(state.busy)

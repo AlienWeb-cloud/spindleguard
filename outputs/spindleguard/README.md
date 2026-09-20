@@ -25,8 +25,9 @@ were made during development. The prototype refuses source and mount paths under
   `open()` outside `bindcheck/` fails the control-plane suite. See
   [BINDCHECK.md](BINDCHECK.md).
 - Native macOS SwiftUI app (`./sg setup` / `make app`) with Setup, Broker,
-  Queue, Identity, Topology and Doctor panes wired to the C broker and `./sg`.
-  See [DESKTOP-APP.md](DESKTOP-APP.md).
+  Queue, Identity, Retain, Topology and Doctor panes wired to the C broker
+  and `./sg`. Retain keeps three lists (active, bucket, purged). See
+  [DESKTOP-APP.md](DESKTOP-APP.md).
 
 See [architecture and reuse research](ARCHITECTURE.md), [upstream attribution](PROVENANCE.md)
 and [recorded proof](PROOF.md).

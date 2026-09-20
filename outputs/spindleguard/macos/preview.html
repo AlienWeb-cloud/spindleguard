@@ -187,7 +187,8 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
     <button type="button" onclick="extra('load-session')">Load Session…</button>
     <button type="button" onclick="extra('retain')">Retained Sessions</button>
     <button type="button" onclick="extra('bucket-current')">Move Current Session to Bucket</button>
-    <button type="button" onclick="extra('empty-bucket')">Empty Deletion Bucket…</button>
+    <button type="button" onclick="extra('purge-bucket')">Purge Bucket</button>
+    <button type="button" onclick="extra('empty-purged')">Empty Purged List…</button>
     <button type="button" onclick="extra('session-parent')">Open Session Parent</button>
     <p class="group">Broker</p>
     <button type="button" onclick="extra('start')">Start</button>
@@ -307,22 +308,28 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
           </div>
           <div class="pane" id="pane-retain">
             <h2>Retain</h2>
-            <p class="lede">Active sessions stay on disk. Move one to the deletion bucket, then restore it or purge it. Purge only deletes ui-session directories already in the bucket, and only after you confirm. /Volumes and /dev are refused.</p>
+            <p class="lede">Three lists. Active is usable. Bucket is recycle. Purged still has files until you destroy them. Destroy only deletes ui-session directories already in the purged list, after confirm. /Volumes and /dev are refused.</p>
             <div class="row">
               <button type="button" onclick="listSessions()">Refresh list</button>
               <button type="button" onclick="newSession()">New session</button>
               <button type="button" onclick="bucketCurrent()">Move current to bucket</button>
-              <button type="button" onclick="purgeBucket()">Empty bucket…</button>
+              <button type="button" onclick="purgeBucket()">Purge bucket</button>
+              <button type="button" onclick="destroyPurged()">Empty purged…</button>
             </div>
             <h3>Active</h3>
             <table>
               <thead><tr><th>Session</th><th>Source</th><th></th></tr></thead>
-              <tbody id="retainBody"><tr><td colspan="3">No retained sessions in this parent yet.</td></tr></tbody>
+              <tbody id="retainBody"><tr><td colspan="3">No active sessions in this parent yet.</td></tr></tbody>
             </table>
-            <h3>Deletion bucket</h3>
+            <h3>Bucket</h3>
             <table>
               <thead><tr><th>Session</th><th>Source</th><th></th></tr></thead>
               <tbody id="bucketBody"><tr><td colspan="3">Bucket is empty.</td></tr></tbody>
+            </table>
+            <h3>Purged</h3>
+            <table>
+              <thead><tr><th>Session</th><th>Source</th><th></th></tr></thead>
+              <tbody id="purgedBody"><tr><td colspan="3">Purged list is empty.</td></tr></tbody>
             </table>
           </div>
           <div class="pane" id="pane-topology">
@@ -351,7 +358,7 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
 </div>
 <script>
 const PANES = ["Setup","Broker","Queue","Identity","Retain","Topology","Doctor"];
-const state = { pane: "setup", source: "", mount: "", log: "", prefix: "/Workspace", session: "", bucketed: false, fuse: "brew install macos-fuse-t/homebrew-cask/fuse-t", status: "Run Setup, then create a disposable session." };
+const state = { pane: "setup", source: "", mount: "", log: "", prefix: "/Workspace", session: "", bucketed: false, purged: false, fuse: "brew install macos-fuse-t/homebrew-cask/fuse-t", status: "Run Setup, then create a disposable session." };
 function $(id){ return document.getElementById(id); }
 function setBusy(on){ $("busy").classList.toggle("on", on); }
 function showPane(name){
@@ -419,7 +426,8 @@ async function newSession(){
     $("prefix").value = state.prefix = body.data.write_prefix || "/Workspace";
     state.session = body.data.session || "";
     state.bucketed = false;
-    setStatus("Session retained at " + body.data.session + ". Move it to the bucket when you want to purge.");
+    state.purged = false;
+    setStatus("Session retained at " + body.data.session + ". Active → bucket → purged.");
     showPane("broker");
   }
 }
@@ -427,21 +435,30 @@ async function listSessions(){
   const body = await run(["session-list","--json"], "retain");
   const rows = (body && body.data && body.data.sessions) || [];
   const bucket = (body && body.data && body.data.bucket) || [];
+  const purged = (body && body.data && body.data.purged) || [];
   $("retainBody").innerHTML = rows.length ? rows.map(s => {
     const session = String(s.session || "").replace(/"/g, "");
     return `<tr><td>${session}</td><td>${s.source || ""}</td><td>
       <button type="button" data-load="${session}">Load</button>
       <button type="button" data-bucket="${session}">Bucket</button>
     </td></tr>`;
-  }).join("") : `<tr><td colspan="3">No retained sessions in this parent yet.</td></tr>`;
+  }).join("") : `<tr><td colspan="3">No active sessions in this parent yet.</td></tr>`;
   $("bucketBody").innerHTML = bucket.length ? bucket.map(s => {
     const session = String(s.session || "").replace(/"/g, "");
     return `<tr><td>${session}</td><td>${s.source || ""}</td><td>
       <button type="button" data-load="${session}">Load</button>
       <button type="button" data-restore="${session}">Restore</button>
-      <button type="button" data-purge="${session}">Purge…</button>
+      <button type="button" data-purge="${session}">Purge</button>
     </td></tr>`;
   }).join("") : `<tr><td colspan="3">Bucket is empty.</td></tr>`;
+  $("purgedBody").innerHTML = purged.length ? purged.map(s => {
+    const session = String(s.session || "").replace(/"/g, "");
+    return `<tr><td>${session}</td><td>${s.source || ""}</td><td>
+      <button type="button" data-load="${session}">Load</button>
+      <button type="button" data-restore="${session}">Restore</button>
+      <button type="button" data-destroy="${session}">Destroy…</button>
+    </td></tr>`;
+  }).join("") : `<tr><td colspan="3">Purged list is empty.</td></tr>`;
   document.querySelectorAll("button[data-load]").forEach(btn => {
     btn.addEventListener("click", () => loadSession(btn.getAttribute("data-load") + "/session.json"));
   });
@@ -454,18 +471,24 @@ async function listSessions(){
   document.querySelectorAll("button[data-purge]").forEach(btn => {
     btn.addEventListener("click", () => purgeSession(btn.getAttribute("data-purge")));
   });
+  document.querySelectorAll("button[data-destroy]").forEach(btn => {
+    btn.addEventListener("click", () => destroySession(btn.getAttribute("data-destroy")));
+  });
+}
+async function applyLane(body){
+  if(!(body && body.ok && body.data)) return;
+  $("source").value = state.source = body.data.source || "";
+  $("mount").value = state.mount = body.data.mount || "";
+  $("logPath").value = state.log = body.data.log || "";
+  state.session = body.data.session || state.session;
+  state.bucketed = !!body.data.deletion_bucket;
+  state.purged = !!body.data.purged;
 }
 async function bucketSession(session){
   if(!session){ setStatus("Create or load a session first."); return; }
   const body = await run(["session-bucket","--session", session, "--json"], "retain");
-  if(body && body.ok && body.data){
-    $("source").value = state.source = body.data.source || "";
-    $("mount").value = state.mount = body.data.mount || "";
-    $("logPath").value = state.log = body.data.log || "";
-    state.session = body.data.session || session;
-    state.bucketed = true;
-    setStatus("Moved to the deletion bucket. Restore or purge from Retain.");
-  }
+  applyLane(body);
+  setStatus("Moved to the bucket. Restore to Active, or purge to the third list.");
   showPane("retain");
 }
 async function bucketCurrent(){
@@ -474,32 +497,46 @@ async function bucketCurrent(){
 }
 async function restoreSession(session){
   const body = await run(["session-restore","--session", session, "--json"], "retain");
-  if(body && body.ok && body.data){
-    $("source").value = state.source = body.data.source || "";
-    $("mount").value = state.mount = body.data.mount || "";
-    $("logPath").value = state.log = body.data.log || "";
-    state.session = body.data.session || session;
-    state.bucketed = false;
-    setStatus("Restored from the deletion bucket.");
+  applyLane(body);
+  if(body && body.ok && body.data && body.data.deletion_bucket){
+    setStatus("Restored to the bucket.");
+    showPane("retain");
+  } else if(body && body.ok){
+    setStatus("Restored to Active.");
     showPane("broker");
   } else {
     showPane("retain");
   }
 }
 async function purgeSession(session){
-  if(!window.confirm("Permanently delete this bucketed session? This cannot be undone.")) return;
-  await run(["session-purge","--session", session, "--yes", "--json"], "retain");
-  if(state.session === session){
-    state.session = ""; state.source = ""; state.mount = ""; state.log = ""; state.bucketed = false;
-    $("source").value = ""; $("mount").value = ""; $("logPath").value = "";
-  }
-  setStatus("Purged from the deletion bucket.");
+  const body = await run(["session-purge","--session", session, "--json"], "retain");
+  applyLane(body);
+  setStatus("Moved to the purged list. Restore to the bucket, or destroy to delete files.");
   showPane("retain");
 }
 async function purgeBucket(){
-  if(!window.confirm("Permanently delete ALL sessions in the bucket? Active sessions are not deleted.")) return;
-  await run(["session-purge","--all","--yes","--json"], "retain");
-  setStatus("Bucket emptied.");
+  await run(["session-purge","--all","--json"], "retain");
+  setStatus("Bucket sent to the purged list.");
+  showPane("retain");
+}
+async function destroySession(session){
+  if(!window.confirm("Permanently delete this purged session? This cannot be undone.")) return;
+  await run(["session-destroy","--session", session, "--yes", "--json"], "retain");
+  if(state.session === session){
+    state.session = ""; state.source = ""; state.mount = ""; state.log = ""; state.bucketed = false; state.purged = false;
+    $("source").value = ""; $("mount").value = ""; $("logPath").value = "";
+  }
+  setStatus("Destroyed from the purged list.");
+  showPane("retain");
+}
+async function destroyPurged(){
+  if(!window.confirm("Permanently delete ALL sessions in the purged list? Active and bucketed sessions are not deleted.")) return;
+  await run(["session-destroy","--all","--yes","--json"], "retain");
+  if(state.purged){
+    state.session = ""; state.source = ""; state.mount = ""; state.log = ""; state.bucketed = false; state.purged = false;
+    $("source").value = ""; $("mount").value = ""; $("logPath").value = "";
+  }
+  setStatus("Purged list emptied.");
   showPane("retain");
 }
 async function loadSession(file){
@@ -510,6 +547,7 @@ async function loadSession(file){
     $("logPath").value = state.log = body.data.log;
     state.session = body.data.session || file.replace(/\/session\.json$/, "");
     state.bucketed = !!body.data.deletion_bucket;
+    state.purged = !!body.data.purged;
     showPane("broker");
   }
 }
@@ -546,7 +584,8 @@ function extra(action){
   if(action === "load-session"){ showPane("retain"); setStatus("Choose a retained session to load, or restore one from the bucket."); return; }
   if(action === "retain"){ showPane("retain"); return; }
   if(action === "bucket-current"){ bucketCurrent(); return; }
-  if(action === "empty-bucket"){ purgeBucket(); return; }
+  if(action === "purge-bucket"){ purgeBucket(); return; }
+  if(action === "empty-purged"){ destroyPurged(); return; }
   if(action === "session-parent"){ showPane("setup"); setStatus("Session parent is shown on Setup. Preview does not open Finder."); return; }
   if(action === "start"){ showPane("broker"); run(["start","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start"); return; }
   if(action === "stop"){ setStatus("Stop is native-only. Preview does not mount."); return; }
@@ -593,12 +632,12 @@ function renderWizard(){
   $("wizardBack").disabled = wizardStep === 0;
   $("wizardNext").textContent = wizardStep < WIZARD_STEPS - 1 ? "Continue" : "Finish";
   const steps = [
-    `<h3>Welcome</h3><p>SpindleGuard is a test-only prototype. It does not protect evidence drives or confine agents.</p><p>It refuses /Volumes and /dev. Active sessions stay on disk until you move them to the deletion bucket and purge.</p><p class="lede">This wizard checks the Mac, optionally installs FUSE-T (only if you confirm), builds the broker and this app, verifies the install, then can create a disposable session.</p>`,
+    `<h3>Welcome</h3><p>SpindleGuard is a test-only prototype. It does not protect evidence drives or confine agents.</p><p>It refuses /Volumes and /dev. Three lists: active, bucket, and purged. Destroy only deletes from the purged list.</p><p class="lede">This wizard checks the Mac, optionally installs FUSE-T (only if you confirm), builds the broker and this app, verifies the install, then can create a disposable session.</p>`,
     `<h3>This Mac</h3><p class="lede">Doctor does not mount and does not open /dev.</p><div class="row"><button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh checks</button></div><div class="checks" id="wizardChecks"></div>`,
     `<h3>FUSE-T</h3><p class="lede">Needed only to mount. Homebrew is never run unless you confirm.</p><pre id="wizardFuse"></pre><div class="row"><button type="button" onclick="copyFuse()">Copy install command</button><button type="button" onclick="run(['setup','--install-fuse','--yes','--json'], 'setup')">Install FUSE-T…</button><button type="button" onclick="window.open('https://github.com/macos-fuse-t/fuse-t','_blank','noopener')">Open docs</button></div>`,
     `<h3>Build</h3><p class="lede">Run Setup builds the Swift app when swiftc is present, and the C broker only when FUSE-T is already installed.</p><div class="row"><button type="button" onclick="run(['setup','--dry-run','--json'], 'setup')">Preview setup</button><button type="button" onclick="run(['setup','--json'], 'setup')">Run setup</button></div><pre id="wizardSetup"></pre>`,
     `<h3>Verify</h3><p class="lede">Quick checks only: policy, scan, fixture bind, CLI. No FUSE mounts.</p><div class="row"><button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify install</button></div><pre id="wizardVerify"></pre>`,
-    `<h3>Disposable session</h3><p class="lede">Creates a retained source and mount under the session parent. Files stay until you bucket and purge them. After Finish you can Start from Broker when this Mac can mount.</p><div class="row"><button type="button" onclick="newSession()">New disposable session</button></div>`
+    `<h3>Disposable session</h3><p class="lede">Creates a retained source and mount under the session parent. Files stay on Active until you bucket, purge, then destroy them. After Finish you can Start from Broker when this Mac can mount.</p><div class="row"><button type="button" onclick="newSession()">New disposable session</button></div>`
   ];
   $("wizardBody").innerHTML = steps[wizardStep];
   if(wizardStep === 1){

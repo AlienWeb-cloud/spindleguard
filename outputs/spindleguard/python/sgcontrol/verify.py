@@ -87,12 +87,12 @@ def verify_quick(project_root: Path) -> dict[str, Any]:
         }
     )
 
-    purge_yes = _run(sg + ["session-purge", "--session", "/tmp/ui-session-1", "--json"], root)
+    purge_yes = _run(sg + ["session-destroy", "--session", "/tmp/ui-session-1", "--json"], root)
     checks.append(
         {
-            "name": "purge-requires-yes",
+            "name": "destroy-requires-yes",
             "ok": purge_yes["returncode"] == 2 and "requires --yes" in purge_yes["stderr"],
-            "detail": "bucket purge is never automatic",
+            "detail": "destroy is never automatic",
         }
     )
 

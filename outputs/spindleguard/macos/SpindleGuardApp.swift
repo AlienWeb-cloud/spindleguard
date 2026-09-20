@@ -68,9 +68,11 @@ struct SpindleGuardApp: App {
                     state.pane = .retain
                 }
                 Button("Move Current Session to Bucket") { state.bucketCurrentSession() }
-                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed)
-                Button("Empty Deletion Bucket…") { state.purgeBucket() }
+                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed || state.sessionPurged)
+                Button("Purge Bucket") { state.purgeBucket() }
                     .disabled(state.bucket.isEmpty)
+                Button("Empty Purged List…") { state.destroyPurged() }
+                    .disabled(state.purged.isEmpty)
             }
         }
         MenuBarExtra("SpindleGuard", systemImage: "externaldrive") {
@@ -114,9 +116,11 @@ struct SpindleGuardApp: App {
                     state.listSessions()
                 }
                 Button("Move Current Session to Bucket") { state.bucketCurrentSession() }
-                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed)
-                Button("Empty Deletion Bucket…") { state.purgeBucket() }
+                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed || state.sessionPurged)
+                Button("Purge Bucket") { state.purgeBucket() }
                     .disabled(state.bucket.isEmpty)
+                Button("Empty Purged List…") { state.destroyPurged() }
+                    .disabled(state.purged.isEmpty)
                 Button("Open Session Parent") { state.openSessionParent() }
             }
             Section("Broker") {
@@ -184,7 +188,7 @@ struct SpindleGuardApp: App {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SpindleGuard is a test-only prototype.")
                     .font(.headline)
-                Text("It does not protect evidence drives or confine agents. Source and mount under /Volumes or /dev are refused. Active sessions stay on disk until you move them to the deletion bucket and purge.")
+                Text("It does not protect evidence drives or confine agents. Source and mount under /Volumes or /dev are refused. Three lists: active, bucket, purged. Destroy only from purged.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 360, alignment: .leading)
                 Text("Session parent")

@@ -68,6 +68,8 @@ class AppBundleTests(unittest.TestCase):
             "func restoreSession(_ row: SessionInfo)",
             "func purgeSession(_ row: SessionInfo)",
             "func purgeBucket()",
+            "func destroySession(_ row: SessionInfo)",
+            "func destroyPurged()",
             "func bucketCurrentSession()",
         ):
             self.assertIn(needle, state)
@@ -82,10 +84,13 @@ class AppBundleTests(unittest.TestCase):
         panes = (MACOS / "Panes.swift").read_text(encoding="utf-8")
         self.assertIn("struct SetupPane", panes)
         self.assertIn("struct RetainPane", panes)
-        self.assertIn("Deletion bucket", panes)
+        self.assertIn('listBlock("Active"', panes)
+        self.assertIn('listBlock("Bucket"', panes)
+        self.assertIn('listBlock("Purged"', panes)
         self.assertIn("Move current to bucket", panes)
-        self.assertIn("Empty bucket", panes)
-        self.assertIn("Purge…", panes)
+        self.assertIn("Purge bucket", panes)
+        self.assertIn("Empty purged", panes)
+        self.assertIn("Destroy…", panes)
         self.assertIn("Run setup", panes)
         self.assertIn("First-run wizard", panes)
         self.assertIn("Verify install", panes)
@@ -133,7 +138,8 @@ class AppBundleTests(unittest.TestCase):
             "Load Session",
             "Retained Sessions",
             "Move Current Session to Bucket",
-            "Empty Deletion Bucket",
+            "Purge Bucket",
+            "Empty Purged List",
             "Open Session Parent",
             "Policy Check",
             "Preview Start",
@@ -157,9 +163,11 @@ class AppBundleTests(unittest.TestCase):
     def test_preview_html_mirrors_native_chrome(self):
         page = (MACOS / "preview.html").read_text(encoding="utf-8")
         self.assertIn("SpindleGuard", page)
-        self.assertIn("Deletion bucket", page)
+        self.assertIn("Three lists", page)
         self.assertIn("session-purge", page)
-        self.assertIn("Empty Deletion Bucket", page)
+        self.assertIn("session-destroy", page)
+        self.assertIn('id="purgedBody"', page)
+        self.assertIn("Empty Purged List", page)
         self.assertIn("Move Current Session to Bucket", page)
         self.assertIn('id="extraBtn"', page)
         self.assertIn("New Session", page)
@@ -182,8 +190,8 @@ class AppBundleTests(unittest.TestCase):
         self.assertEqual(info["CFBundleIdentifier"], "cloud.alienweb.spindleguard")
         self.assertEqual(info["CFBundleExecutable"], "SpindleGuard")
         self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
-        self.assertEqual(info["CFBundleShortVersionString"], "0.7")
-        self.assertEqual(info["CFBundleVersion"], "7")
+        self.assertEqual(info["CFBundleShortVersionString"], "0.8")
+        self.assertEqual(info["CFBundleVersion"], "8")
         self.assertFalse(info["NSSupportsAutomaticTermination"])
 
     def test_make_app_requires_macos(self):

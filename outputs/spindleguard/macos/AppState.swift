@@ -18,6 +18,7 @@ struct SessionInfo: Identifiable, Hashable {
     let mount: String
     let log: String
     let bucketed: Bool
+    let purged: Bool
 }
 
 @MainActor
@@ -78,7 +79,9 @@ final class AppState: ObservableObject {
     @Published var checks: [SetupCheck] = []
     @Published var sessions: [SessionInfo] = []
     @Published var bucket: [SessionInfo] = []
+    @Published var purged: [SessionInfo] = []
     @Published var sessionBucketed: Bool = false
+    @Published var sessionPurged: Bool = false
     @Published var showWizard: Bool = false
     @Published var wizardStep: Int = 0
 
@@ -192,7 +195,7 @@ final class AppState: ObservableObject {
         runSG(arguments: ["session-create", "--parent", parent, "--json"]) { data in
             guard let obj = data as? [String: Any] else { return }
             self.applySession(obj)
-            self.status = "Session retained at \(obj["session"] as? String ?? ""). Move it to the bucket when you want to purge."
+            self.status = "Session retained at \(obj["session"] as? String ?? ""). Active → bucket → purged."
             self.events = []
             self.retainedLog = ""
             self.listSessions()
@@ -206,9 +209,7 @@ final class AppState: ObservableObject {
             self.runSG(arguments: ["session-load", "--file", path, "--json"]) { data in
                 guard let obj = data as? [String: Any] else { return }
                 self.applySession(obj)
-                self.status = obj["deletion_bucket"] as? Bool == true
-                    ? "Loaded from the deletion bucket. Restore before Start, or purge to delete."
-                    : "Loaded retained session. Move it to the bucket when you want to purge."
+                self.status = self.laneStatus(obj)
                 self.pane = .broker
             }
         }
@@ -224,6 +225,7 @@ final class AppState: ObservableObject {
             guard let obj = data as? [String: Any] else { return }
             self.sessions = self.parseSessions(obj["sessions"] as? [[String: Any]] ?? [])
             self.bucket = self.parseSessions(obj["bucket"] as? [[String: Any]] ?? [])
+            self.purged = self.parseSessions(obj["purged"] as? [[String: Any]] ?? [])
         }
     }
 
@@ -236,7 +238,8 @@ final class AppState: ObservableObject {
                 source: item["source"] as? String ?? "",
                 mount: item["mount"] as? String ?? "",
                 log: item["log"] as? String ?? "",
-                bucketed: item["deletion_bucket"] as? Bool ?? false
+                bucketed: item["deletion_bucket"] as? Bool ?? false,
+                purged: item["purged"] as? Bool ?? false
             )
         }
     }
@@ -247,15 +250,23 @@ final class AppState: ObservableObject {
         runSG(arguments: ["session-load", "--file", file, "--json"]) { data in
             guard let obj = data as? [String: Any] else { return }
             self.applySession(obj)
-            self.status = obj["deletion_bucket"] as? Bool == true
-                ? "Loaded from the deletion bucket. Restore before Start, or purge to delete."
-                : "Loaded retained session. Move it to the bucket when you want to purge."
+            self.status = self.laneStatus(obj)
             self.pane = .broker
         }
     }
 
     private func sessionParent() -> String {
         sessionParentPath.isEmpty ? SGPaths.sessionParent().path : sessionParentPath
+    }
+
+    private func laneStatus(_ obj: [String: Any]) -> String {
+        if obj["purged"] as? Bool == true {
+            return "Loaded from the purged list. Restore to the bucket before Start. Destroy deletes files."
+        }
+        if obj["deletion_bucket"] as? Bool == true {
+            return "Loaded from the bucket. Restore to Active before Start, or purge to the third list."
+        }
+        return "Loaded active session. Bucket, then purge, then destroy."
     }
 
     private func clearIfCurrent(session: String) {
@@ -265,6 +276,7 @@ final class AppState: ObservableObject {
             logPath = ""
             sessionRoot = ""
             sessionBucketed = false
+            sessionPurged = false
         }
     }
 
@@ -275,8 +287,8 @@ final class AppState: ObservableObject {
             pane = .broker
             return
         }
-        if row.bucketed {
-            error = "Session is already in the bucket."
+        if row.bucketed || row.purged {
+            error = "Only an active session can be moved to the bucket."
             pane = .retain
             return
         }
@@ -286,15 +298,8 @@ final class AppState: ObservableObject {
             return
         }
         runSG(arguments: ["session-bucket", "--session", row.session, "--parent", parent, "--json"]) { data in
-            self.status = "Moved to the deletion bucket. Restore or purge from Retain."
-            self.clearIfCurrent(session: row.session)
-            if let obj = data as? [String: Any], let moved = obj["session"] as? String {
-                self.sessionRoot = moved
-                self.sessionBucketed = true
-                self.source = obj["source"] as? String ?? ""
-                self.mount = obj["mount"] as? String ?? ""
-                self.logPath = obj["log"] as? String ?? ""
-            }
+            self.status = "Moved to the bucket. Restore to Active, or purge to the third list."
+            self.applyMoved(data, fallback: row.session)
             self.listSessions()
             self.pane = .retain
         }
@@ -306,22 +311,32 @@ final class AppState: ObservableObject {
             error = "Create or load a session first."
             return
         }
-        bucketSession(
-            SessionInfo(
-                id: sessionRoot,
-                session: sessionRoot,
-                source: source,
-                mount: mount,
-                log: logPath,
-                bucketed: sessionBucketed
-            )
+        bucketSession(currentSessionInfo())
+    }
+
+    private func currentSessionInfo() -> SessionInfo {
+        SessionInfo(
+            id: sessionRoot,
+            session: sessionRoot,
+            source: source,
+            mount: mount,
+            log: logPath,
+            bucketed: sessionBucketed,
+            purged: sessionPurged
         )
+    }
+
+    private func applyMoved(_ data: Any, fallback: String) {
+        clearIfCurrent(session: fallback)
+        if let obj = data as? [String: Any] {
+            applySession(obj)
+        }
     }
 
     func restoreSession(_ row: SessionInfo) {
         error = ""
-        if !row.bucketed {
-            error = "Session is not in the bucket."
+        if !row.bucketed && !row.purged {
+            error = "Restore moves purged to the bucket, or the bucket to Active."
             pane = .retain
             return
         }
@@ -333,16 +348,16 @@ final class AppState: ObservableObject {
         runSG(arguments: ["session-restore", "--session", row.session, "--parent", parent, "--json"]) { data in
             guard let obj = data as? [String: Any] else { return }
             self.applySession(obj)
-            self.status = "Restored from the deletion bucket."
+            self.status = row.purged ? "Restored to the bucket." : "Restored to Active."
             self.listSessions()
-            self.pane = .broker
+            self.pane = row.purged ? .retain : .broker
         }
     }
 
     func purgeSession(_ row: SessionInfo) {
         error = ""
         if !row.bucketed {
-            error = "Move the session to the bucket before purging."
+            error = "Move the session to the bucket before purging it to the third list."
             pane = .retain
             return
         }
@@ -351,16 +366,10 @@ final class AppState: ObservableObject {
             pane = .broker
             return
         }
-        let alert = NSAlert()
-        alert.messageText = "Permanently delete this bucketed session?"
-        alert.informativeText = "\(row.session)\n\nThis cannot be undone. Only ui-session directories in the deletion bucket are deleted."
-        alert.addButton(withTitle: "Purge")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
         let parent = sessionParent()
-        runSG(arguments: ["session-purge", "--session", row.session, "--parent", parent, "--yes", "--json"]) { _ in
-            self.status = "Purged from the deletion bucket."
-            self.clearIfCurrent(session: row.session)
+        runSG(arguments: ["session-purge", "--session", row.session, "--parent", parent, "--json"]) { data in
+            self.status = "Moved to the purged list. Restore to the bucket, or destroy to delete files."
+            self.applyMoved(data, fallback: row.session)
             self.listSessions()
             self.pane = .retain
         }
@@ -370,23 +379,71 @@ final class AppState: ObservableObject {
         error = ""
         revealPane(.retain)
         if running {
-            error = "Stop the broker before emptying the bucket."
+            error = "Stop the broker before purging the bucket."
+            return
+        }
+        let parent = sessionParent()
+        runSG(arguments: ["session-purge", "--all", "--parent", parent, "--json"]) { data in
+            if let obj = data as? [String: Any], let count = obj["count"] as? Int {
+                self.status = "Moved \(count) session(s) from the bucket to the purged list."
+            } else {
+                self.status = "Bucket sent to the purged list."
+            }
+            if self.sessionBucketed {
+                self.clearIfCurrent(session: self.sessionRoot)
+            }
+            self.listSessions()
+        }
+    }
+
+    func destroySession(_ row: SessionInfo) {
+        error = ""
+        if !row.purged {
+            error = "Move the session to the purged list before destroying it."
+            pane = .retain
+            return
+        }
+        if running && (sessionRoot == row.session || source.hasPrefix(row.session + "/")) {
+            error = "Stop the broker before destroying this session."
+            pane = .broker
             return
         }
         let alert = NSAlert()
-        alert.messageText = "Permanently delete every session in the bucket?"
-        alert.informativeText = "Only ui-session directories already in the deletion bucket are removed. Active sessions are not deleted."
-        alert.addButton(withTitle: "Empty bucket")
+        alert.messageText = "Permanently delete this purged session?"
+        alert.informativeText = "\(row.session)\n\nThis cannot be undone. Only ui-session directories in the purged list are deleted."
+        alert.addButton(withTitle: "Destroy")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         let parent = sessionParent()
-        runSG(arguments: ["session-purge", "--all", "--parent", parent, "--yes", "--json"]) { data in
+        runSG(arguments: ["session-destroy", "--session", row.session, "--parent", parent, "--yes", "--json"]) { _ in
+            self.status = "Destroyed from the purged list."
+            self.clearIfCurrent(session: row.session)
+            self.listSessions()
+            self.pane = .retain
+        }
+    }
+
+    func destroyPurged() {
+        error = ""
+        revealPane(.retain)
+        if running {
+            error = "Stop the broker before emptying the purged list."
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Permanently delete every session in the purged list?"
+        alert.informativeText = "Only ui-session directories already in the purged list are removed. Active and bucketed sessions are not deleted."
+        alert.addButton(withTitle: "Empty purged")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let parent = sessionParent()
+        runSG(arguments: ["session-destroy", "--all", "--parent", parent, "--yes", "--json"]) { data in
             if let obj = data as? [String: Any], let count = obj["count"] as? Int {
-                self.status = "Purged \(count) session(s) from the bucket."
+                self.status = "Destroyed \(count) session(s) from the purged list."
             } else {
-                self.status = "Bucket emptied."
+                self.status = "Purged list emptied."
             }
-            if self.sessionBucketed {
+            if self.sessionPurged {
                 self.clearIfCurrent(session: self.sessionRoot)
             }
             self.listSessions()
@@ -440,8 +497,8 @@ final class AppState: ObservableObject {
 
     func start() {
         error = ""
-        if sessionBucketed {
-            error = "Restore this session from the bucket before starting."
+        if sessionBucketed || sessionPurged {
+            error = "Restore this session to Active before starting."
             pane = .retain
             return
         }
@@ -726,6 +783,7 @@ final class AppState: ObservableObject {
         sessionRoot = obj["session"] as? String ?? ""
         writePrefix = obj["write_prefix"] as? String ?? "/Workspace"
         sessionBucketed = obj["deletion_bucket"] as? Bool ?? false
+        sessionPurged = obj["purged"] as? Bool ?? false
         error = ""
     }
 
