@@ -144,8 +144,13 @@ body {
 .form label { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: center; margin: 6px 0; }
 .form input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12px Menlo, monospace; }
 pre { font: 11px/1.45 Menlo, monospace; overflow: auto; max-height: 220px; white-space: pre-wrap; }
-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
+#pane-retain td:not(:last-child) {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 11px/1.35 Menlo, monospace;
+}
+#pane-retain th:last-child, #pane-retain td:last-child { width: 220px; white-space: nowrap; }
 .busy {
   display: none; position: absolute; inset: 38px 0 0; background: rgba(20,30,40,.08);
   align-items: center; justify-content: center;
