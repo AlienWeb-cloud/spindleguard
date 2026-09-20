@@ -64,6 +64,11 @@ class AppBundleTests(unittest.TestCase):
             "func maybePresentWizard()",
             "func revealPane(_ pane: Pane)",
             "func openSessionParent()",
+            "func bucketSession(_ row: SessionInfo)",
+            "func restoreSession(_ row: SessionInfo)",
+            "func purgeSession(_ row: SessionInfo)",
+            "func purgeBucket()",
+            "func bucketCurrentSession()",
         ):
             self.assertIn(needle, state)
         self.assertIn('wizardKey = "SGWizardFinished"', state)
@@ -77,7 +82,10 @@ class AppBundleTests(unittest.TestCase):
         panes = (MACOS / "Panes.swift").read_text(encoding="utf-8")
         self.assertIn("struct SetupPane", panes)
         self.assertIn("struct RetainPane", panes)
-        self.assertIn("There is no deletion bucket", panes)
+        self.assertIn("Deletion bucket", panes)
+        self.assertIn("Move current to bucket", panes)
+        self.assertIn("Empty bucket", panes)
+        self.assertIn("Purge…", panes)
         self.assertIn("Run setup", panes)
         self.assertIn("First-run wizard", panes)
         self.assertIn("Verify install", panes)
@@ -124,6 +132,8 @@ class AppBundleTests(unittest.TestCase):
             "New Disposable Session",
             "Load Session",
             "Retained Sessions",
+            "Move Current Session to Bucket",
+            "Empty Deletion Bucket",
             "Open Session Parent",
             "Policy Check",
             "Preview Start",
@@ -147,7 +157,10 @@ class AppBundleTests(unittest.TestCase):
     def test_preview_html_mirrors_native_chrome(self):
         page = (MACOS / "preview.html").read_text(encoding="utf-8")
         self.assertIn("SpindleGuard", page)
-        self.assertIn("There is no deletion bucket", page)
+        self.assertIn("Deletion bucket", page)
+        self.assertIn("session-purge", page)
+        self.assertIn("Empty Deletion Bucket", page)
+        self.assertIn("Move Current Session to Bucket", page)
         self.assertIn('id="extraBtn"', page)
         self.assertIn("New Session", page)
         self.assertIn("Retain", page)
@@ -169,8 +182,8 @@ class AppBundleTests(unittest.TestCase):
         self.assertEqual(info["CFBundleIdentifier"], "cloud.alienweb.spindleguard")
         self.assertEqual(info["CFBundleExecutable"], "SpindleGuard")
         self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
-        self.assertEqual(info["CFBundleShortVersionString"], "0.6")
-        self.assertEqual(info["CFBundleVersion"], "6")
+        self.assertEqual(info["CFBundleShortVersionString"], "0.7")
+        self.assertEqual(info["CFBundleVersion"], "7")
         self.assertFalse(info["NSSupportsAutomaticTermination"])
 
     def test_make_app_requires_macos(self):

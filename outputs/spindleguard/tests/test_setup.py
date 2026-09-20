@@ -78,7 +78,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn("volumes-refusal", names)
         self.assertIn("scan", names)
         self.assertIn("bind-example", names)
-        self.assertIn("fuse-requires-yes", names)
+        self.assertIn("purge-requires-yes", names)
         self.assertIn("unmount-volumes", names)
 
     def test_cli_verify_quick(self):
@@ -157,16 +157,81 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(body["source"], rec["source"])
             self.assertTrue(body["retained"])
 
-    def test_session_list_has_no_deletion_bucket(self):
+    def test_session_list_has_empty_bucket(self):
         with tempfile.TemporaryDirectory() as tmp:
             created = run_sg("session-create", "--parent", tmp, "--json")
             rec = json.loads(created.stdout)
             listed = run_sg("session-list", "--parent", tmp, "--json")
             self.assertEqual(listed.returncode, 0, listed.stderr)
             payload = json.loads(listed.stdout)
-            self.assertFalse(payload["deletion_buckets"])
-            self.assertFalse(payload["deletes"])
+            self.assertTrue(payload["deletion_buckets"])
+            self.assertTrue(payload["deletes"])
+            self.assertFalse(payload["deletes_active"])
             self.assertEqual(payload["sessions"][0]["session"], rec["session"])
+            self.assertEqual(payload["bucket"], [])
+
+    def test_session_bucket_restore_purge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            created = run_sg("session-create", "--parent", tmp, "--json")
+            rec = json.loads(created.stdout)
+            session = rec["session"]
+            marker = Path(session) / "source" / ".spindleguard-test-root"
+            self.assertTrue(marker.is_file())
+            refused = run_sg("session-purge", "--session", session, "--json")
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn("requires --yes", refused.stderr)
+            self.assertTrue(Path(session).is_dir())
+            active_purge = run_sg("session-purge", "--session", session, "--yes", "--json")
+            self.assertEqual(active_purge.returncode, 2)
+            self.assertIn("already in the bucket", active_purge.stderr)
+            self.assertTrue(Path(session).is_dir())
+            moved = run_sg("session-bucket", "--session", session, "--parent", tmp, "--json")
+            self.assertEqual(moved.returncode, 0, moved.stderr)
+            body = json.loads(moved.stdout)
+            self.assertTrue(body["deletion_bucket"])
+            self.assertFalse(Path(session).exists())
+            bucketed = body["session"]
+            self.assertTrue(Path(bucketed).is_dir())
+            listed = json.loads(run_sg("session-list", "--parent", tmp, "--json").stdout)
+            self.assertEqual(listed["sessions"], [])
+            self.assertEqual(listed["bucket"][0]["session"], bucketed)
+            restored = run_sg("session-restore", "--session", bucketed, "--parent", tmp, "--json")
+            self.assertEqual(restored.returncode, 0, restored.stderr)
+            back = json.loads(restored.stdout)
+            self.assertFalse(back["deletion_bucket"])
+            self.assertTrue(Path(back["session"]).is_dir())
+            run_sg("session-bucket", "--session", back["session"], "--parent", tmp, "--json")
+            listed = json.loads(run_sg("session-list", "--parent", tmp, "--json").stdout)
+            target = listed["bucket"][0]["session"]
+            purged = run_sg("session-purge", "--session", target, "--yes", "--json")
+            self.assertEqual(purged.returncode, 0, purged.stderr)
+            gone = json.loads(purged.stdout)
+            self.assertEqual(gone["count"], 1)
+            self.assertFalse(Path(target).exists())
+            empty = json.loads(run_sg("session-list", "--parent", tmp, "--json").stdout)
+            self.assertEqual(empty["bucket"], [])
+            self.assertEqual(empty["sessions"], [])
+
+    def test_session_purge_all_and_refusals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = json.loads(run_sg("session-create", "--parent", tmp, "--json").stdout)
+            second = json.loads(run_sg("session-create", "--parent", tmp, "--json").stdout)
+            run_sg("session-bucket", "--session", first["session"], "--parent", tmp, "--json")
+            run_sg("session-bucket", "--session", second["session"], "--parent", tmp, "--json")
+            dry = run_sg("session-purge", "--all", "--parent", tmp, "--dry-run", "--json")
+            self.assertEqual(dry.returncode, 0, dry.stderr)
+            planned = json.loads(dry.stdout)
+            self.assertEqual(planned["count"], 2)
+            self.assertTrue(planned["dry_run"])
+            listed = json.loads(run_sg("session-list", "--parent", tmp, "--json").stdout)
+            self.assertEqual(len(listed["bucket"]), 2)
+            emptied = run_sg("session-purge", "--all", "--parent", tmp, "--yes", "--json")
+            self.assertEqual(emptied.returncode, 0, emptied.stderr)
+            after = json.loads(run_sg("session-list", "--parent", tmp, "--json").stdout)
+            self.assertEqual(after["bucket"], [])
+            volumes = run_sg("session-bucket", "--session", "/Volumes/exhibit")
+            self.assertEqual(volumes.returncode, 2)
+            self.assertIn("Prototype refuses /Volumes", volumes.stderr)
 
     def test_preview_refuses_dangerous_argv(self):
         from sgcontrol.policy import PolicyError
@@ -175,6 +240,8 @@ class SetupTests(unittest.TestCase):
         with self.assertRaises(PolicyError):
             _validate_argv(["setup", "--install-fuse", "--yes"])
         with self.assertRaises(PolicyError):
+            _validate_argv(["session-purge", "--session", "/tmp/ui-session-1"])
+        with self.assertRaises(PolicyError):
             _validate_argv(["verify", "--full"])
         with self.assertRaises(PolicyError):
             _validate_argv(["start", "--source", "/tmp/a", "--mount", "/tmp/b"])
@@ -182,6 +249,8 @@ class SetupTests(unittest.TestCase):
             _validate_argv(["topology", "--path", "/Volumes/exhibit"])
         _validate_argv(["setup", "--dry-run", "--json"])
         _validate_argv(["start", "--dry-run", "--source", "/tmp/a", "--mount", "/tmp/b"])
+        _validate_argv(["session-purge", "--session", "/tmp/ui-session-1", "--yes", "--json"])
+        _validate_argv(["session-bucket", "--session", "/tmp/ui-session-1", "--json"])
 
     def test_session_load_volumes(self):
         result = run_sg("session-load", "--file", "/Volumes/exhibit/session.json")

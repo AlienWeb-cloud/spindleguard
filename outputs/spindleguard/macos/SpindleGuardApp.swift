@@ -67,6 +67,10 @@ struct SpindleGuardApp: App {
                     state.listSessions()
                     state.pane = .retain
                 }
+                Button("Move Current Session to Bucket") { state.bucketCurrentSession() }
+                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed)
+                Button("Empty Deletion Bucket…") { state.purgeBucket() }
+                    .disabled(state.bucket.isEmpty)
             }
         }
         MenuBarExtra("SpindleGuard", systemImage: "externaldrive") {
@@ -109,6 +113,10 @@ struct SpindleGuardApp: App {
                     state.revealPane(.retain)
                     state.listSessions()
                 }
+                Button("Move Current Session to Bucket") { state.bucketCurrentSession() }
+                    .disabled(state.sessionRoot.isEmpty || state.sessionBucketed)
+                Button("Empty Deletion Bucket…") { state.purgeBucket() }
+                    .disabled(state.bucket.isEmpty)
                 Button("Open Session Parent") { state.openSessionParent() }
             }
             Section("Broker") {
@@ -176,7 +184,7 @@ struct SpindleGuardApp: App {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SpindleGuard is a test-only prototype.")
                     .font(.headline)
-                Text("It does not protect evidence drives or confine agents. Source and mount under /Volumes or /dev are refused. Session files are retained. There is no deletion bucket.")
+                Text("It does not protect evidence drives or confine agents. Source and mount under /Volumes or /dev are refused. Active sessions stay on disk until you move them to the deletion bucket and purge.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 360, alignment: .leading)
                 Text("Session parent")

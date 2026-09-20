@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""SpindleGuard control CLI. Non-interactive. Does not delete files.
+"""SpindleGuard control CLI. Non-interactive.
 
 Examples:
   ./sg setup --dry-run --json
@@ -9,6 +9,10 @@ Examples:
   ./sg doctor --json
   ./sg session-create --parent ./work --json
   ./sg session-load --file DIR/session.json --json
+  ./sg session-list --parent ./work --json
+  ./sg session-bucket --session DIR --json
+  ./sg session-restore --session DIR --json
+  ./sg session-purge --session DIR --yes --json
   ./sg policy-check --source DIR --mount DIR --write-prefix /Workspace --json
   ./sg start --dry-run --source DIR --mount DIR --write-prefix /Workspace --delay-ms 150 --json
   ./sg unmount --mount DIR --dry-run
@@ -36,7 +40,16 @@ from sgcontrol.broker import broker_command
 from sgcontrol.doctor import FUSE_INSTALL, doctor
 from sgcontrol.events import competing_wait, load_events, queue_snapshot
 from sgcontrol.policy import PolicyError, check, check_observe_path
-from sgcontrol.session import create_session, default_parent, list_sessions, load_session
+from sgcontrol.session import (
+    bucket_session,
+    create_session,
+    default_parent,
+    infer_parent,
+    list_sessions,
+    load_session,
+    purge_sessions,
+    restore_session,
+)
 from sgcontrol.setup import setup
 from sgcontrol.verify import verify_full, verify_quick
 
@@ -88,6 +101,66 @@ def cmd_session_list(args: argparse.Namespace) -> int:
     except (PolicyError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         print("  ./sg session-list --parent ./work --json", file=sys.stderr)
+        return 2
+    _out(payload, True)
+    return 0
+
+
+def _session_parent(args: argparse.Namespace) -> Path:
+    if args.parent:
+        return Path(args.parent)
+    if getattr(args, "session", None):
+        return infer_parent(Path(args.session))
+    return default_parent(ROOT)
+
+
+def cmd_session_bucket(args: argparse.Namespace) -> int:
+    if not args.session:
+        print("Error: --session is required.", file=sys.stderr)
+        print("  ./sg session-bucket --session DIR --json", file=sys.stderr)
+        return 2
+    try:
+        record = bucket_session(_session_parent(args), Path(args.session))
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-bucket --session DIR --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_restore(args: argparse.Namespace) -> int:
+    if not args.session:
+        print("Error: --session is required.", file=sys.stderr)
+        print("  ./sg session-restore --session DIR --json", file=sys.stderr)
+        return 2
+    try:
+        record = restore_session(_session_parent(args), Path(args.session))
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-restore --session DIR --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_purge(args: argparse.Namespace) -> int:
+    if not args.session and not args.all:
+        print("Error: --session or --all is required.", file=sys.stderr)
+        print("  ./sg session-purge --session DIR --yes --json", file=sys.stderr)
+        return 2
+    try:
+        parent = _session_parent(args) if args.session or args.parent else default_parent(ROOT)
+        payload = purge_sessions(
+            parent,
+            Path(args.session) if args.session else None,
+            purge_all=args.all,
+            yes=args.yes,
+            dry_run=args.dry_run,
+        )
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-purge --session DIR --yes --json", file=sys.stderr)
         return 2
     _out(payload, True)
     return 0
@@ -324,15 +397,36 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_session_create)
 
-    sl = sub.add_parser("session-load", help="load a retained session.json (never deletes)")
+    sl = sub.add_parser("session-load", help="load a retained session.json")
     sl.add_argument("--file", help="path to session.json")
     sl.add_argument("--json", action="store_true")
     sl.set_defaults(func=cmd_session_load)
 
-    ls = sub.add_parser("session-list", help="list retained sessions; never deletes")
+    ls = sub.add_parser("session-list", help="list retained sessions and the deletion bucket")
     ls.add_argument("--parent", help="parent directory (default: <project>/work)")
     ls.add_argument("--json", action="store_true")
     ls.set_defaults(func=cmd_session_list)
+
+    sb = sub.add_parser("session-bucket", help="move a disposable session into the deletion bucket")
+    sb.add_argument("--session", help="ui-session directory or session.json")
+    sb.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sb.add_argument("--json", action="store_true")
+    sb.set_defaults(func=cmd_session_bucket)
+
+    sr = sub.add_parser("session-restore", help="move a session out of the deletion bucket")
+    sr.add_argument("--session", help="bucketed ui-session directory or session.json")
+    sr.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sr.add_argument("--json", action="store_true")
+    sr.set_defaults(func=cmd_session_restore)
+
+    sp = sub.add_parser("session-purge", help="permanently delete bucketed sessions; requires --yes")
+    sp.add_argument("--session", help="bucketed ui-session directory or session.json")
+    sp.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sp.add_argument("--all", action="store_true", help="purge every session in the bucket")
+    sp.add_argument("--yes", action="store_true", help="required to actually delete")
+    sp.add_argument("--dry-run", action="store_true", help="list targets; do not delete")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_session_purge)
 
     p = sub.add_parser("policy-check", help="refuse /Volumes, /dev, nested, unmarked trees")
     p.add_argument("--source")

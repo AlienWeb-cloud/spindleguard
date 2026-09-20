@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Loopback preview of the native app. Does not mount, open /dev, or delete."""
+"""Loopback preview of the native app. Does not mount or open /dev.
+
+Purge only deletes bucketed ui-session directories under the session parent.
+"""
 from __future__ import annotations
 
 import json
@@ -13,7 +16,7 @@ from urllib.parse import urlparse
 
 from .policy import PolicyError, is_dev_path, is_volumes_path
 
-BLOCKED_FLAGS = ("--install-fuse", "--yes", "--full", "--allow-missing-marker")
+BLOCKED_FLAGS = ("--install-fuse", "--full", "--allow-missing-marker")
 ALLOWED_COMMANDS = {
     "doctor",
     "setup",
@@ -21,6 +24,9 @@ ALLOWED_COMMANDS = {
     "session-create",
     "session-load",
     "session-list",
+    "session-bucket",
+    "session-restore",
+    "session-purge",
     "policy-check",
     "start",
     "unmount",
@@ -43,6 +49,10 @@ def _validate_argv(argv: list[str]) -> None:
     for flag in BLOCKED_FLAGS:
         if flag in argv:
             raise PolicyError(f"preview refuses {flag}")
+    if "--yes" in argv and command != "session-purge":
+        raise PolicyError("preview refuses --yes")
+    if command == "session-purge" and "--yes" not in argv and "--dry-run" not in argv:
+        raise PolicyError("preview purge requires --yes")
     if command == "start" and "--dry-run" not in argv:
         raise PolicyError("preview start requires --dry-run")
     if command == "unmount" and "--dry-run" not in argv:
