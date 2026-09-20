@@ -50,6 +50,14 @@ APFS physical stores to physical whole disks. It refuses unknown/virtual/RAID
 mappings rather than pretending a logical device is a spindle. Its result is
 observational only; the current single-root queue does not use a global registry.
 
+Identity is not a device name. `bindcheck.assert_bound()` opens a path only
+to obtain an fd, then binds on serial / PARTUUID / FS-UUID and the fd's
+major:minor, and returns that fd. Permission-shaped checks (exists, read-only,
+path allow-list) are not sufficient: names such as `sda1` move. See
+[BINDCHECK.md](BINDCHECK.md). Device-shaped `open()` outside `bindcheck/`
+fails the control-plane suite. The native Mac app (`make app`) is a SwiftUI
+front door over the same policy, broker, and `sg` CLI. See [DESKTOP-APP.md](DESKTOP-APP.md).
+
 Production: one broker process owns all roots and a queue per stable physical
 media identity. diskN names are session identifiers and can change after eject.
 Multiple physical stores require reservations on every backing disk in stable

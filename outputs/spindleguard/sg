@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""SpindleGuard control CLI. Non-interactive.
+
+Examples:
+  ./sg setup --dry-run --json
+  ./sg setup
+  ./sg verify --quick
+  ./sg doctor --json
+  ./sg session-create --parent ./work --json
+  ./sg session-load --file DIR/session.json --json
+  ./sg session-list --parent ./work --json
+  ./sg session-bucket --session DIR --json
+  ./sg session-restore --session DIR --json
+  ./sg session-purge --session DIR --json
+  ./sg session-destroy --session DIR --yes --json
+  ./sg policy-check --source DIR --mount DIR --write-prefix /Workspace --json
+  ./sg start --dry-run --source DIR --mount DIR --write-prefix /Workspace --delay-ms 150 --json
+  ./sg unmount --mount DIR --dry-run
+  ./sg scan --root . --json
+  ./sg bind --manifest FILE --path PATH --fixture FILE
+  ./sg topology --path DIR
+  ./sg probe-log --log FILE --json
+  ./sg app --dry-run
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Sequence
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "python"))
+
+from sgcontrol.broker import broker_command
+from sgcontrol.doctor import FUSE_INSTALL, doctor
+from sgcontrol.events import competing_wait, load_events, queue_snapshot
+from sgcontrol.policy import PolicyError, check, check_observe_path
+from sgcontrol.session import (
+    bucket_session,
+    create_session,
+    default_parent,
+    destroy_sessions,
+    infer_parent,
+    list_sessions,
+    load_session,
+    purge_sessions,
+    restore_session,
+)
+from sgcontrol.setup import setup
+from sgcontrol.verify import verify_full, verify_quick
+
+
+def _out(data: Any, as_json: bool) -> None:
+    if as_json or isinstance(data, (dict, list)):
+        print(json.dumps(data, indent=2, sort_keys=True))
+    else:
+        print(data)
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    payload = doctor(ROOT)
+    _out(payload, True)
+    return 0 if not payload["problems"] or not args.strict else 2
+
+
+def cmd_session_create(args: argparse.Namespace) -> int:
+    parent = Path(args.parent) if args.parent else default_parent(ROOT)
+    try:
+        record = create_session(parent)
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-create --parent ./work --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_load(args: argparse.Namespace) -> int:
+    if not args.file:
+        print("Error: --file is required.", file=sys.stderr)
+        print("  ./sg session-load --file DIR/session.json --json", file=sys.stderr)
+        return 2
+    try:
+        record = load_session(Path(args.file))
+    except (PolicyError, OSError, json.JSONDecodeError, KeyError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-load --file DIR/session.json --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_list(args: argparse.Namespace) -> int:
+    parent = Path(args.parent) if args.parent else default_parent(ROOT)
+    try:
+        payload = list_sessions(parent)
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-list --parent ./work --json", file=sys.stderr)
+        return 2
+    _out(payload, True)
+    return 0
+
+
+def _session_parent(args: argparse.Namespace) -> Path:
+    if args.parent:
+        return Path(args.parent)
+    if getattr(args, "session", None):
+        return infer_parent(Path(args.session))
+    return default_parent(ROOT)
+
+
+def cmd_session_bucket(args: argparse.Namespace) -> int:
+    if not args.session:
+        print("Error: --session is required.", file=sys.stderr)
+        print("  ./sg session-bucket --session DIR --json", file=sys.stderr)
+        return 2
+    try:
+        record = bucket_session(_session_parent(args), Path(args.session))
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-bucket --session DIR --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_restore(args: argparse.Namespace) -> int:
+    if not args.session:
+        print("Error: --session is required.", file=sys.stderr)
+        print("  ./sg session-restore --session DIR --json", file=sys.stderr)
+        return 2
+    try:
+        record = restore_session(_session_parent(args), Path(args.session))
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-restore --session DIR --json", file=sys.stderr)
+        return 2
+    _out(record, True)
+    return 0
+
+
+def cmd_session_purge(args: argparse.Namespace) -> int:
+    if not args.session and not args.all:
+        print("Error: --session or --all is required.", file=sys.stderr)
+        print("  ./sg session-purge --session DIR --json", file=sys.stderr)
+        return 2
+    try:
+        parent = _session_parent(args) if args.session or args.parent else default_parent(ROOT)
+        payload = purge_sessions(
+            parent,
+            Path(args.session) if args.session else None,
+            purge_all=args.all,
+            dry_run=args.dry_run,
+        )
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-purge --session DIR --json", file=sys.stderr)
+        return 2
+    _out(payload, True)
+    return 0
+
+
+def cmd_session_destroy(args: argparse.Namespace) -> int:
+    if not args.session and not args.all:
+        print("Error: --session or --all is required.", file=sys.stderr)
+        print("  ./sg session-destroy --session DIR --yes --json", file=sys.stderr)
+        return 2
+    try:
+        parent = _session_parent(args) if args.session or args.parent else default_parent(ROOT)
+        payload = destroy_sessions(
+            parent,
+            Path(args.session) if args.session else None,
+            destroy_all=args.all,
+            yes=args.yes,
+            dry_run=args.dry_run,
+        )
+    except (PolicyError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg session-destroy --session DIR --yes --json", file=sys.stderr)
+        return 2
+    _out(payload, True)
+    return 0
+
+
+def cmd_policy(args: argparse.Namespace) -> int:
+    if not args.source or not args.mount:
+        print("Error: --source and --mount are required.", file=sys.stderr)
+        print(
+            "  ./sg policy-check --source DIR --mount DIR --write-prefix /Workspace --json",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        check(args.source, args.mount, args.write_prefix, require_marker=not args.allow_missing_marker)
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    _out({"ok": True, "source": args.source, "mount": args.mount, "write_prefix": args.write_prefix}, True)
+    return 0
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    if not args.source or not args.mount:
+        print("Error: --source and --mount are required.", file=sys.stderr)
+        print(
+            "  ./sg start --source DIR --mount DIR --write-prefix /Workspace --delay-ms 150",
+            file=sys.stderr,
+        )
+        return 2
+    info = doctor(ROOT)
+    binary = args.binary or info.get("broker")
+    if not binary:
+        print("Error: broker binary not found. Run make first.", file=sys.stderr)
+        print("  make && ./sg start --source DIR --mount DIR --write-prefix /Workspace", file=sys.stderr)
+        return 2
+    try:
+        cmd = broker_command(
+            binary,
+            args.source,
+            args.mount,
+            args.write_prefix,
+            args.delay_ms,
+            require_marker=not args.allow_missing_marker,
+        )
+    except (PolicyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    if args.dry_run:
+        _out({"dry_run": True, "cmd": cmd, "can_mount": info["can_mount"]}, True)
+        return 0
+    if not info["can_mount"]:
+        print("Error: this host cannot mount (need macOS + FUSE-T + built broker).", file=sys.stderr)
+        for problem in info["problems"]:
+            print(f"  {problem}", file=sys.stderr)
+        print("  ./sg start --dry-run --source DIR --mount DIR --write-prefix /Workspace --json", file=sys.stderr)
+        return 2
+    os.execv(cmd[0], cmd)
+    return 2
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    from bindcheck.scan import STRUCTURAL_CANARY, scan_tree
+    root = Path(args.root)
+    if not root.is_dir():
+        print(f"Error: --root is not a directory: {root}", file=sys.stderr)
+        print("  ./sg scan --root . --json", file=sys.stderr)
+        return 2
+    hits = scan_tree(root)
+    _out({"canary": STRUCTURAL_CANARY, "violations": [
+        {"path": v.path, "line": v.line, "message": v.message} for v in hits
+    ]}, True)
+    return 1 if hits else 0
+
+
+def cmd_bind(args: argparse.Namespace) -> int:
+    from bindcheck.__main__ import main as bind_main
+    argv = ["bind"]
+    if args.manifest:
+        argv += ["--manifest", args.manifest]
+    if args.path:
+        argv += ["--path", args.path]
+    if args.fixture:
+        argv += ["--fixture", args.fixture]
+    return bind_main(argv)
+
+
+def cmd_rotate(args: argparse.Namespace) -> int:
+    from bindcheck.__main__ import main as bind_main
+    argv = ["rotate-manifest"]
+    for flag, value in (
+        ("--old", args.old),
+        ("--observed", args.observed),
+        ("--reason", args.reason),
+        ("--out", args.out),
+        ("--audit", args.audit),
+    ):
+        if value:
+            argv += [flag, value]
+    if args.dry_run:
+        argv.append("--dry-run")
+    return bind_main(argv)
+
+
+def cmd_topology(args: argparse.Namespace) -> int:
+    if not args.path:
+        print("Error: --path is required.", file=sys.stderr)
+        print("  ./sg topology --path DIR", file=sys.stderr)
+        return 2
+    from sgcontrol.policy import check_observe_path
+    try:
+        check_observe_path(args.path)
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    script = ROOT / "tools" / "topology.py"
+    result = subprocess.run([sys.executable, "-B", str(script), args.path], cwd=str(ROOT))
+    return result.returncode
+
+
+def cmd_probe_log(args: argparse.Namespace) -> int:
+    if not args.log:
+        print("Error: --log is required.", file=sys.stderr)
+        print("  ./sg probe-log --log FILE --json", file=sys.stderr)
+        return 2
+    text = Path(args.log).read_text(encoding="utf-8")
+    events = load_events(text)
+    snap = queue_snapshot(events)
+    evidence = competing_wait(events)
+    _out({"snapshot": snap, "competing": evidence}, True)
+    return 0 if evidence else 1
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    try:
+        report = setup(
+            ROOT,
+            dry_run=args.dry_run,
+            install_fuse=args.install_fuse,
+            yes=args.yes,
+            create_session_flag=args.create_session,
+            session_parent=Path(args.parent) if args.parent else None,
+        )
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg setup --dry-run --json", file=sys.stderr)
+        print(f"  {FUSE_INSTALL}", file=sys.stderr)
+        return 2
+    _out(report, True)
+    if args.strict and (report["errors"] or (not report["can_mount"] and sys.platform == "darwin")):
+        return 2
+    return 0 if not report["errors"] else 2
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    payload = verify_full(ROOT) if args.full else verify_quick(ROOT)
+    _out(payload, True)
+    return 0 if payload["ok"] else 1
+
+
+def cmd_unmount(args: argparse.Namespace) -> int:
+    if not args.mount:
+        print("Error: --mount is required.", file=sys.stderr)
+        print("  ./sg unmount --mount DIR", file=sys.stderr)
+        return 2
+    try:
+        check_observe_path(args.mount)
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    cmd = ["/sbin/umount", args.mount]
+    if args.dry_run:
+        _out({"dry_run": True, "cmd": cmd}, True)
+        return 0
+    if sys.platform != "darwin":
+        print("Error: unmount requires macOS.", file=sys.stderr)
+        print("  ./sg unmount --mount DIR --dry-run", file=sys.stderr)
+        return 2
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error: {result.stderr.strip() or 'umount failed'}", file=sys.stderr)
+        return result.returncode
+    _out({"ok": True, "mount": args.mount}, True)
+    return 0
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    from sgcontrol.ui import serve_preview
+    try:
+        return serve_preview(ROOT, host=args.host, port=args.port, open_browser=args.open)
+    except (PolicyError, OSError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("  ./sg ui --host 127.0.0.1 --port 8765", file=sys.stderr)
+        return 2
+
+
+def cmd_app(args: argparse.Namespace) -> int:
+    bundle = ROOT / "SpindleGuard.app"
+    payload = {
+        "bundle": str(bundle),
+        "exists": bundle.is_dir(),
+        "darwin": sys.platform == "darwin",
+        "hint": "./sg setup && open SpindleGuard.app",
+    }
+    if args.dry_run:
+        _out(payload, True)
+        return 0 if payload["exists"] or not payload["darwin"] else 1
+    if sys.platform != "darwin":
+        print("Error: native app requires macOS.", file=sys.stderr)
+        print("  ./sg setup", file=sys.stderr)
+        return 2
+    if not bundle.is_dir():
+        print("Error: SpindleGuard.app is not built.", file=sys.stderr)
+        print("  ./sg setup && ./sg app", file=sys.stderr)
+        return 2
+    result = subprocess.run(["/usr/bin/open", str(bundle)])
+    return result.returncode
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="sg",
+        description="SpindleGuard control CLI and native-app helper.",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    d = sub.add_parser("doctor", help="report whether this host can mount and build the app")
+    d.add_argument("--strict", action="store_true", help="exit 2 if any problem is listed")
+    d.add_argument("--json", action="store_true")
+    d.set_defaults(func=cmd_doctor)
+
+    s = sub.add_parser("session-create", help="create a retained disposable source+mount pair")
+    s.add_argument("--parent", help="parent directory (default: <project>/work)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_session_create)
+
+    sl = sub.add_parser("session-load", help="load a retained session.json")
+    sl.add_argument("--file", help="path to session.json")
+    sl.add_argument("--json", action="store_true")
+    sl.set_defaults(func=cmd_session_load)
+
+    ls = sub.add_parser("session-list", help="list active, bucket, and purged sessions")
+    ls.add_argument("--parent", help="parent directory (default: <project>/work)")
+    ls.add_argument("--json", action="store_true")
+    ls.set_defaults(func=cmd_session_list)
+
+    sb = sub.add_parser("session-bucket", help="move an active session into the bucket")
+    sb.add_argument("--session", help="ui-session directory or session.json")
+    sb.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sb.add_argument("--json", action="store_true")
+    sb.set_defaults(func=cmd_session_bucket)
+
+    sr = sub.add_parser("session-restore", help="move purged to bucket, or bucket to active")
+    sr.add_argument("--session", help="bucketed or purged ui-session directory or session.json")
+    sr.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sr.add_argument("--json", action="store_true")
+    sr.set_defaults(func=cmd_session_restore)
+
+    sp = sub.add_parser("session-purge", help="move a bucketed session into the purged list")
+    sp.add_argument("--session", help="bucketed ui-session directory or session.json")
+    sp.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sp.add_argument("--all", action="store_true", help="purge every session in the bucket")
+    sp.add_argument("--dry-run", action="store_true", help="list targets; do not move")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_session_purge)
+
+    sd = sub.add_parser("session-destroy", help="permanently delete purged sessions; requires --yes")
+    sd.add_argument("--session", help="purged ui-session directory or session.json")
+    sd.add_argument("--parent", help="session parent (inferred from --session when omitted)")
+    sd.add_argument("--all", action="store_true", help="destroy every session in the purged list")
+    sd.add_argument("--yes", action="store_true", help="required to actually delete")
+    sd.add_argument("--dry-run", action="store_true", help="list targets; do not delete")
+    sd.add_argument("--json", action="store_true")
+    sd.set_defaults(func=cmd_session_destroy)
+
+    p = sub.add_parser("policy-check", help="refuse /Volumes, /dev, nested, unmarked trees")
+    p.add_argument("--source")
+    p.add_argument("--mount")
+    p.add_argument("--write-prefix", default=None)
+    p.add_argument("--allow-missing-marker", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_policy)
+
+    t = sub.add_parser("start", help="policy-check then exec the C broker (macOS + FUSE-T)")
+    t.add_argument("--source")
+    t.add_argument("--mount")
+    t.add_argument("--write-prefix", default=None)
+    t.add_argument("--delay-ms", type=int, default=None)
+    t.add_argument("--binary", help="path to spindleguard helper")
+    t.add_argument("--allow-missing-marker", action="store_true")
+    t.add_argument("--dry-run", action="store_true", help="print argv; do not exec")
+    t.add_argument("--json", action="store_true")
+    t.set_defaults(func=cmd_start)
+
+    sc = sub.add_parser("scan", help="fail if device-shaped open() exists outside bindcheck/")
+    sc.add_argument("--root", default=".")
+    sc.add_argument("--json", action="store_true")
+    sc.set_defaults(func=cmd_scan)
+
+    b = sub.add_parser("bind", help="assert_bound against a fake fixture (no host /dev)")
+    b.add_argument("--manifest")
+    b.add_argument("--path")
+    b.add_argument("--fixture")
+    b.set_defaults(func=cmd_bind)
+
+    r = sub.add_parser("rotate-manifest", help="write a new identity generation; never overwrites")
+    r.add_argument("--old")
+    r.add_argument("--observed")
+    r.add_argument("--reason")
+    r.add_argument("--out")
+    r.add_argument("--audit")
+    r.add_argument("--dry-run", action="store_true")
+    r.set_defaults(func=cmd_rotate)
+
+    top = sub.add_parser("topology", help="observational disk mapping (macOS diskutil)")
+    top.add_argument("--path")
+    top.set_defaults(func=cmd_topology)
+
+    pr = sub.add_parser("probe-log", help="extract competing-wait evidence from a broker JSONL log")
+    pr.add_argument("--log")
+    pr.add_argument("--json", action="store_true")
+    pr.set_defaults(func=cmd_probe_log)
+
+    a = sub.add_parser("app", help="open SpindleGuard.app (macOS)")
+    a.add_argument("--dry-run", action="store_true")
+    a.set_defaults(func=cmd_app)
+
+    st = sub.add_parser("setup", help="check deps, optionally install FUSE-T, build broker and app")
+    st.add_argument("--dry-run", action="store_true")
+    st.add_argument("--install-fuse", action="store_true", help="run brew install; requires --yes")
+    st.add_argument("--yes", action="store_true", help="confirm --install-fuse")
+    st.add_argument("--create-session", action="store_true", help="also create a disposable session")
+    st.add_argument("--parent", help="session parent when using --create-session")
+    st.add_argument("--strict", action="store_true", help="exit 2 unless this Mac can mount")
+    st.add_argument("--json", action="store_true")
+    st.set_defaults(func=cmd_setup)
+
+    v = sub.add_parser("verify", help="verify CLI, policy, scan, bind; --full also runs control tests")
+    v.add_argument("--quick", action="store_true", help="skip unittest suite (default)")
+    v.add_argument("--full", action="store_true", help="also run test-control and test-bindcheck")
+    v.add_argument("--json", action="store_true")
+    v.set_defaults(func=cmd_verify)
+
+    u = sub.add_parser("unmount", help="unmount a mountpoint; refuses /Volumes and /dev")
+    u.add_argument("--mount")
+    u.add_argument("--dry-run", action="store_true")
+    u.add_argument("--json", action="store_true")
+    u.set_defaults(func=cmd_unmount)
+
+    ui = sub.add_parser("ui", help="open a local preview of the native app (127.0.0.1)")
+    ui.add_argument("--host", default="127.0.0.1")
+    ui.add_argument("--port", type=int, default=8765)
+    ui.add_argument("--open", action="store_true", help="open the preview in a browser")
+    ui.set_defaults(func=cmd_ui)
+
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not args.command:
+        parser.print_help(sys.stderr)
+        print("Error: a subcommand is required.", file=sys.stderr)
+        print("  ./sg setup --dry-run --json", file=sys.stderr)
+        return 2
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

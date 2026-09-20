@@ -20,6 +20,14 @@ were made during development. The prototype refuses source and mount paths under
 - Read-only topology helper resolves APFS volume → physical store → whole disk.
 - A real mount test uses two separate Python client processes and checks that a
   request for the second file waits behind a deliberately delayed first-file read.
+- Identity binding (`bindcheck.assert_bound`): open a path only to get an fd,
+  verify serial / PARTUUID / FS-UUID independently, return the fd. Device-shaped
+  `open()` outside `bindcheck/` fails the control-plane suite. See
+  [BINDCHECK.md](BINDCHECK.md).
+- Native macOS SwiftUI app (`./sg setup` / `make app`) with Setup, Broker,
+  Queue, Identity, Retain, Topology and Doctor panes wired to the C broker
+  and `./sg`. Retain keeps three lists (active, bucket, purged). See
+  [DESKTOP-APP.md](DESKTOP-APP.md).
 
 See [architecture and reuse research](ARCHITECTURE.md), [upstream attribution](PROVENANCE.md)
 and [recorded proof](PROOF.md).
@@ -30,14 +38,31 @@ and [recorded proof](PROOF.md).
    a local Git repository. If it is standalone, run `git init` in that directory
    before testing. No remote is required.
 2. Install Apple's Command Line Tools if absent (`xcode-select --install`). You
-   need `clang`, `make`, Git, and Python 3.
-3. Install FUSE-T following its [official instructions](https://github.com/macos-fuse-t/fuse-t).
-   Tested runtime: **1.2.7**, macOS **26.5 / Darwin 25.5.0**, Apple Silicon.
-   The documented package-manager command is:
+   need `clang`, `make`, Git, Python 3, and `swiftc` for the native app.
+3. From the **repository root**:
+
+   ```sh
+   ./sg setup
+   ./sg verify --quick
+   open outputs/spindleguard/SpindleGuard.app
+   ```
+
+   From this `outputs/spindleguard` directory, `./sg setup` then
+   `open SpindleGuard.app` is enough. Setup builds the SwiftUI app when
+   `swiftc` is present, and the C broker only when FUSE-T is already
+   installed. It does not mount and does not open `/dev`.
+4. FUSE-T is a system dependency with a separate license. The project never
+   installs it unless you confirm:
+
+   ```sh
+   ./sg setup --install-fuse --yes
+   ```
+
+   Equivalent package-manager command (also copied from the Setup pane):
    `brew install macos-fuse-t/homebrew-cask/fuse-t`.
-   This is a system dependency installation on the target Mac; the project does
-   not perform it automatically. Its runtime license is separate from our GPL code.
-4. From the copied project directory, run:
+   Follow FUSE-T's [official instructions](https://github.com/macos-fuse-t/fuse-t).
+   Tested runtime: **1.2.7**, macOS **26.5 / Darwin 25.5.0**, Apple Silicon.
+5. Real mount proof (disposable data only; retains files):
 
    ```sh
    make
@@ -48,6 +73,24 @@ Build uses `/usr/local/include/fuse` and `/usr/local/lib/libfuse-t.dylib`, inclu
 its required runtime search path. If the installed package uses different paths,
 change the Makefile paths to match `fuse-t.pc`. Do not substitute Linux FUSE3
 headers: this version uses the macOS FUSE2 API.
+
+Agent-safe tests (no mounts, no host `/dev` or `/Volumes`):
+
+```sh
+SG_REQUIRE_FULL=1 make test-control
+make test-bindcheck
+./sg verify --quick
+```
+
+Native Mac UI (macOS 13+, Command Line Tools; FUSE-T only needed to mount):
+
+```sh
+./sg setup
+open outputs/spindleguard/SpindleGuard.app
+./outputs/spindleguard/sg --help
+```
+
+The Setup pane is the default. Create a disposable session there, then Start.
 
 `make test` runs five topology tests, then real read/write and read-only mounts.
 It prints `ALL MOUNT TESTS PASSED` only after content comparisons, cross-process
