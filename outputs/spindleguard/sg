@@ -51,6 +51,7 @@ from sgcontrol.session import (
     load_session,
     purge_sessions,
     restore_session,
+    start_refusal,
 )
 from sgcontrol.setup import setup
 from sgcontrol.verify import verify_full, verify_quick
@@ -229,6 +230,9 @@ def cmd_start(args: argparse.Namespace) -> int:
             args.delay_ms,
             require_marker=not args.allow_missing_marker,
         )
+        refusal = start_refusal(args.source) or start_refusal(args.mount)
+        if refusal:
+            raise PolicyError(refusal)
     except (PolicyError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
@@ -307,6 +311,12 @@ def cmd_topology(args: argparse.Namespace) -> int:
 def cmd_probe_log(args: argparse.Namespace) -> int:
     if not args.log:
         print("Error: --log is required.", file=sys.stderr)
+        print("  ./sg probe-log --log FILE --json", file=sys.stderr)
+        return 2
+    try:
+        check_observe_path(args.log)
+    except PolicyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         print("  ./sg probe-log --log FILE --json", file=sys.stderr)
         return 2
     text = Path(args.log).read_text(encoding="utf-8")

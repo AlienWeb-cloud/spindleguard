@@ -65,6 +65,12 @@ into `<parent>/bucket/`, then into `<parent>/purged/`. Destroy requires
 confirm/`--yes` and only deletes `ui-session-*` directories already in
 the purged list. Active and bucketed sessions are not unlinked.
 
+`./sg start` and the app both refuse a source or mount that still sits
+under `bucket/` or `purged/`, including when those paths are typed in
+rather than loaded from the Retain list. Restore the session to Active
+first. `probe-log` refuses `/Volumes` and `/dev` the same way topology
+and unmount do.
+
 Every `sg` subcommand that the prototype exposes is reachable from a
 button, the Control menu, the Setup/Broker/Control command menus, or the
 **menu bar extra** (the SpindleGuard disk icon in the macOS menu bar).
@@ -86,9 +92,14 @@ A loopback preview of the same chrome is available without compiling Swift:
 ./sg ui --port 8765
 ```
 
-It binds `127.0.0.1` only and refuses FUSE install, `verify --full`, and
-non-dry-run start/unmount. Preview `--yes` is allowed only for
-`session-destroy`, which unlinks purged `ui-session-*` directories.
+It binds `127.0.0.1` only. The server still refuses FUSE install,
+`verify --full`, and non-dry-run start/unmount. The page matches that:
+Install FUSE-T copies the Homebrew command, and Start and Unmount send
+`--dry-run` only. Stop, Finder, and reading through a live mount stay
+native-only. Probe Queue runs `probe-log` on the retained log. Identity
+fields and manifest rotation are on the page; rotation defaults to
+dry-run. Preview `--yes` is allowed only for `session-destroy`, which
+unlinks purged `ui-session-*` directories.
 
 ## What it will not do
 

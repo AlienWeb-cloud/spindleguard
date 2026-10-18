@@ -18,6 +18,7 @@ from sgcontrol.session import (
     MSG_NOT_IN_BUCKET,
     MSG_NOT_PURGED,
     MSG_NOT_STAGED,
+    MSG_START_INACTIVE,
     bucket_session,
     create_session,
     destroy_sessions,
@@ -25,6 +26,7 @@ from sgcontrol.session import (
     load_session,
     purge_sessions,
     restore_session,
+    start_refusal,
 )
 
 
@@ -146,6 +148,19 @@ class SessionTests(unittest.TestCase):
             self.assertEqual(len(listed["purged"]), 1)
             loaded = load_session(purged / "session.json")
             self.assertIn(f"/{loaded['lane']}/", loaded["source"].replace("\\", "/"))
+
+    def test_start_refusal_follows_lane_directory(self):
+        self.assertIsNone(start_refusal("/tmp/work/ui-session-9/source"))
+        self.assertIsNone(start_refusal("/tmp/bucket/notes.txt"))
+        self.assertEqual(
+            start_refusal("/tmp/work/bucket/ui-session-9/source"),
+            MSG_START_INACTIVE,
+        )
+        self.assertEqual(
+            start_refusal("/tmp/work/purged/ui-session-9/mount"),
+            MSG_START_INACTIVE,
+        )
+        self.assertIsNone(start_refusal(""))
 
     def test_refuses_volumes_parent(self):
         with self.assertRaises(PolicyError):

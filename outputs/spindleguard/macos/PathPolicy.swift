@@ -39,11 +39,32 @@ enum PathPolicy {
         return !sourceUnderMount && !mountUnderSource
     }
 
+    static let inactiveSessionMessage = "Restore this session to Active before starting."
+
     static func writePrefixShape(_ prefix: String) -> Bool {
         guard prefix.count >= 2, prefix.hasPrefix("/") else { return false }
         if prefix.contains("..") { return false }
         if prefix.hasSuffix("/") { return false }
         return true
+    }
+
+    /// Refuse start when source or mount still sits under bucket/ or purged/.
+    static func startRefusal(_ path: String) -> String? {
+        if path.isEmpty { return nil }
+        var current = URL(fileURLWithPath: resolved(path))
+        while true {
+            let name = current.lastPathComponent
+            if name.range(of: #"^ui-session-[0-9]+$"#, options: .regularExpression) != nil {
+                let lane = current.deletingLastPathComponent().lastPathComponent
+                if lane == "bucket" || lane == "purged" {
+                    return inactiveSessionMessage
+                }
+                return nil
+            }
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path { return nil }
+            current = parent
+        }
     }
 
     static func validate(source: String, mount: String, writePrefix: String?, writable: Bool) -> String? {
