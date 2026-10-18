@@ -143,6 +143,10 @@ body {
 .fix { font: 11px Menlo, monospace; color: var(--slate); margin: 0; }
 .form label { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: center; margin: 6px 0; }
 .form input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12px Menlo, monospace; }
+.form .field { display: flex; gap: 6px; align-items: center; }
+.form .field input[type=text] { flex: 1; }
+.form input[type=range] { width: 100%; }
+.form label.checkline { grid-template-columns: 1fr auto; }
 pre { font: 11px/1.45 Menlo, monospace; overflow: auto; max-height: 220px; white-space: pre-wrap; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
@@ -236,8 +240,9 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
         <strong>SpindleGuard</strong>
         <div class="toolbar">
           <button type="button" onclick="newSession()">New Session</button>
-          <button type="button" id="startBtn" disabled>Start</button>
-          <button type="button" onclick="showPane('queue')">Probe Queue</button>
+          <button type="button" id="startBtn" onclick="previewStart()">Start</button>
+          <button type="button" id="stopBtn" disabled title="Stop needs a live mount on macOS">Stop</button>
+          <button type="button" onclick="probeLog()">Probe Queue</button>
           <button type="button" onclick="run(['setup','--json'], 'setup')">Run Setup</button>
           <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify</button>
         </div>
@@ -267,8 +272,17 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
               <button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh doctor</button>
             </div>
             <div class="row">
+              <button type="button" onclick="previewInstallFuse()">Install FUSE-T…</button>
               <button type="button" onclick="copyFuse()">Copy FUSE-T command</button>
+              <button type="button" onclick="window.open('https://github.com/macos-fuse-t/fuse-t','_blank','noopener')">Open FUSE-T docs</button>
+            </div>
+            <div class="form">
+              <label>Session parent <span class="field"><input id="sessionParent" type="text" placeholder="default: work/"><button type="button" onclick="choosePath('sessionParent','Session parent directory')">Choose…</button></span></label>
+            </div>
+            <div class="row">
+              <button type="button" onclick="openSessionParent()">Open parent</button>
               <button type="button" onclick="newSession()">New disposable session</button>
+              <button type="button" onclick="loadSessionPrompt()">Load session…</button>
             </div>
             <div class="banner" id="setupStatus"></div>
             <h3>Setup report</h3>
@@ -281,41 +295,75 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
             <p class="lede">Disposable test data only. The prototype refuses /Volumes and /dev, requires a .spindleguard-test-root marker, and serializes backing work through one FIFO queue.</p>
             <div class="row">
               <button type="button" onclick="newSession()">New session</button>
+              <button type="button" onclick="loadSessionPrompt()">Load session…</button>
+              <button type="button" id="brokerStart" onclick="previewStart()">Start</button>
+              <button type="button" disabled title="Stop needs a live mount on macOS">Stop</button>
+              <button type="button" id="unmountBtn" onclick="previewUnmount()">Unmount</button>
               <button type="button" onclick="policyCheck()">Policy check</button>
               <button type="button" onclick="previewStart()">Preview start</button>
             </div>
             <div class="form">
-              <label>Source <input id="source" type="text"></label>
-              <label>Mount <input id="mount" type="text"></label>
-              <label>Write prefix <input id="prefix" type="text" value="/Workspace"></label>
-              <label>Log <input id="logPath" type="text"></label>
+              <label>Source <span class="field"><input id="source" type="text"><button type="button" onclick="choosePath('source','Disposable source directory')">Choose…</button></span></label>
+              <label>Mount <span class="field"><input id="mount" type="text"><button type="button" onclick="choosePath('mount','Empty mount directory')">Choose…</button></span></label>
+              <label class="checkline">Allow writes under prefix <input id="writable" type="checkbox" checked></label>
+              <label id="prefixRow">Write prefix <input id="prefix" type="text" value="/Workspace"></label>
+              <label>Read delay <span class="field"><input id="delay" type="range" min="0" max="500" step="10" value="150"><span id="delayLabel">150 ms</span></span></label>
+              <label>Log <span class="field"><input id="logPath" type="text"><button type="button" onclick="revealLog()">Reveal</button></span></label>
+            </div>
+            <div class="row">
+              <button type="button" onclick="revealPath('source','Open Source')">Open Source</button>
+              <button type="button" onclick="revealPath('mount','Open Mount')">Open Mount</button>
+              <button type="button" onclick="revealLog()">Reveal log</button>
             </div>
             <div class="banner" id="brokerStatus"></div>
             <pre id="policyJSON"></pre>
           </div>
           <div class="pane" id="pane-queue">
             <h2>Queue</h2>
-            <p class="lede">Live stderr from the C broker. A competing request should wait while one backing callback is active.</p>
+            <p class="lede">Live stderr from the C broker. A competing request should wait while one backing callback is active. This preview cannot mount, so Probe reads the retained log with probe-log.</p>
+            <div class="row">
+              <button type="button" onclick="probeLog()">Probe concurrent reads</button>
+              <button type="button" onclick="revealLog()">Reveal log</button>
+            </div>
             <table>
               <thead><tr><th>Event</th><th>Op</th><th>Ticket</th><th>Wait ms</th><th>Pending</th></tr></thead>
               <tbody id="queueBody"><tr><td colspan="5">Idle. Start the broker on a Mac to fill this table.</td></tr></tbody>
             </table>
+            <pre id="probeJSON">Probe Queue runs probe-log on the retained broker log.</pre>
           </div>
           <div class="pane" id="pane-identity">
             <h2>Identity</h2>
             <p class="lede">assert_bound opens a fixture path only as a name, then binds on serial / PARTUUID / FS-UUID. The Mac UI never opens host /dev.</p>
             <div class="row">
-              <button type="button" onclick="bindExample()">Bind example identity</button>
+              <button type="button" onclick="loadExample()">Load example</button>
+              <button type="button" onclick="loadFailing()">Load failing-media example</button>
               <button type="button" onclick="run(['scan','--root','.','--json'], 'scan')">Scan tree</button>
+              <button type="button" onclick="bindExample()">Bind identity</button>
+            </div>
+            <div class="form">
+              <label>Manifest <span class="field"><input id="identityManifest" type="text" value="macos/Resources/example-manifest.json"><button type="button" onclick="choosePath('identityManifest','Manifest JSON')">Choose…</button></span></label>
+              <label>Fixture <span class="field"><input id="identityFixture" type="text" value="macos/Resources/example-fixture.json"><button type="button" onclick="choosePath('identityFixture','Fixture JSON')">Choose…</button></span></label>
+              <label>Fixture path key <input id="identityPath" type="text" value="/dev/sda1"></label>
             </div>
             <pre id="bindJSON"></pre>
             <pre id="scanJSON"></pre>
+            <h3>Manifest rotation</h3>
+            <p class="lede">Writes a new generation. Refuses overwrite. Dry-run is the default.</p>
+            <div class="form">
+              <label>Old manifest <span class="field"><input id="rotateOld" type="text"><button type="button" onclick="choosePath('rotateOld','Old manifest')">Choose…</button></span></label>
+              <label>Observed identity <span class="field"><input id="rotateObserved" type="text"><button type="button" onclick="choosePath('rotateObserved','Observed identity JSON')">Choose…</button></span></label>
+              <label>Reason <input id="rotateReason" type="text" value="preview rotation"></label>
+              <label>Out (must not exist) <span class="field"><input id="rotateOut" type="text"><button type="button" onclick="choosePath('rotateOut','New manifest path')">Choose…</button></span></label>
+              <label>Audit JSONL <span class="field"><input id="rotateAudit" type="text"><button type="button" onclick="choosePath('rotateAudit','Audit JSONL')">Choose…</button></span></label>
+              <label class="checkline">Dry run <input id="rotateDry" type="checkbox" checked></label>
+            </div>
+            <div class="row"><button type="button" onclick="rotateManifest()">Rotate manifest</button></div>
           </div>
           <div class="pane" id="pane-retain">
             <h2>Retain</h2>
             <p class="lede">Three lists. Active is usable. Bucket is recycle. Purged still has files until you destroy them. Destroy only deletes ui-session directories already in the purged list, after confirm. /Volumes and /dev are refused.</p>
             <div class="row">
-              <button type="button" onclick="listSessions()">Refresh list</button>
+              <button type="button" onclick="refreshSessions()">Refresh list</button>
               <button type="button" onclick="newSession()">New session</button>
               <button type="button" onclick="bucketCurrent()">Move current to bucket</button>
               <button type="button" onclick="purgeBucket()">Purge bucket</button>
@@ -350,6 +398,7 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
               <button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh</button>
               <button type="button" onclick="run(['setup','--json'], 'setup')">Run setup</button>
               <button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify install</button>
+              <button type="button" onclick="copyFuse()">Copy FUSE-T command</button>
             </div>
             <div class="checks" id="doctorChecks"></div>
             <pre id="doctorJSON"></pre>
@@ -370,7 +419,7 @@ function showPane(name){
   state.pane = name;
   document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-"+name));
   document.querySelectorAll(".nav").forEach(b => b.classList.toggle("active", b.dataset.pane === name));
-  if(name === "retain") listSessions();
+  if(name === "retain") return listSessions();
 }
 function renderSidebar(){
   $("sidebar").innerHTML = PANES.map(p => {
@@ -386,6 +435,68 @@ function setStatus(text){
   $("setupStatus").textContent = text;
   $("brokerStatus").textContent = text;
   $("extraStatus").textContent = text;
+}
+function parentArgs(){
+  const parent = ($("sessionParent") && $("sessionParent").value || "").trim();
+  return parent ? ["--parent", parent] : [];
+}
+function laneOf(path){
+  const parts = String(path || "").split("/").filter(Boolean);
+  for(let i = 0; i < parts.length; i++){
+    if(/^ui-session-\d+$/.test(parts[i])){
+      const parent = i > 0 ? parts[i - 1] : "";
+      if(parent === "bucket") return "bucket";
+      if(parent === "purged") return "purged";
+      return "active";
+    }
+  }
+  return "";
+}
+function startBlocked(){
+  const source = $("source") ? $("source").value : state.source;
+  const mount = $("mount") ? $("mount").value : state.mount;
+  const lanes = [laneOf(source), laneOf(mount)];
+  return state.bucketed || state.purged || lanes.includes("bucket") || lanes.includes("purged");
+}
+function syncChrome(){
+  const source = ($("source").value || "").trim();
+  const mount = ($("mount").value || "").trim();
+  const blocked = startBlocked();
+  $("startBtn").disabled = !source || !mount || blocked;
+  if($("brokerStart")) $("brokerStart").disabled = !source || !mount || blocked;
+  if($("unmountBtn")) $("unmountBtn").disabled = !mount;
+  if($("prefixRow")) $("prefixRow").style.display = $("writable").checked ? "" : "none";
+  if($("delay") && $("delayLabel")) $("delayLabel").textContent = $("delay").value + " ms";
+}
+function choosePath(id, title){
+  const next = window.prompt(title, $(id).value || "");
+  if(next !== null){ $(id).value = next; syncChrome(); }
+}
+function delayMs(){ return String(parseInt($("delay").value || "0", 10) || 0); }
+function writesEnabled(){ return $("writable").checked; }
+function previewInstallFuse(){
+  const copy = window.confirm("Install FUSE-T with Homebrew?\n\n" + state.fuse + "\n\nThis preview cannot run Homebrew. OK copies the command.");
+  if(!copy) return;
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(state.fuse).catch(function(){});
+  setStatus("Preview refuses FUSE install. Copied: " + state.fuse);
+}
+function openSessionParent(){
+  showPane("setup");
+  const parent = $("sessionParent").value.trim();
+  setStatus(parent ? ("Session parent: " + parent + ". Preview does not open Finder.") : "Session parent is the default work/ directory. Preview does not open Finder.");
+}
+function revealLog(){
+  const log = $("logPath").value;
+  setStatus(log ? ("Reveal Log is native Finder. Log path: " + log) : "Reveal Log is native Finder. No log path yet.");
+}
+function revealPath(id, label){
+  const value = $(id).value;
+  setStatus(value ? (label + " is native Finder. Path: " + value) : (label + " needs a path."));
+}
+function loadSessionPrompt(){
+  const suggested = state.session ? state.session + "/session.json" : "";
+  const file = window.prompt("Path to session.json", suggested);
+  if(file) loadSession(file);
 }
 async function run(argv, sink){
   setBusy(true);
@@ -413,8 +524,8 @@ async function run(argv, sink){
     }
     if(sink === "scan") $("scanJSON").textContent = JSON.stringify(data, null, 2);
     if(sink === "bind") $("bindJSON").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-    if(body.ok) setStatus(sink + " finished.");
-    else setStatus(body.error || body.stderr || (sink + " failed"));
+    if(body.ok && sink !== "retain") setStatus(sink + " finished.");
+    else if(!body.ok) setStatus(body.error || body.stderr || (sink + " failed"));
     return body;
   } catch (err) {
     setStatus(String(err));
@@ -423,7 +534,7 @@ async function run(argv, sink){
   }
 }
 async function newSession(){
-  const body = await run(["session-create","--json"], "session");
+  const body = await run(["session-create", ...parentArgs(), "--json"], "session");
   if(body && body.ok && body.data){
     $("source").value = state.source = body.data.source;
     $("mount").value = state.mount = body.data.mount;
@@ -432,12 +543,14 @@ async function newSession(){
     state.session = body.data.session || "";
     state.bucketed = false;
     state.purged = false;
+    if($("writable")) $("writable").checked = true;
     setStatus("Session retained at " + body.data.session + ". Active → bucket → purged.");
+    syncChrome();
     showPane("broker");
   }
 }
 async function listSessions(){
-  const body = await run(["session-list","--json"], "retain");
+  const body = await run(["session-list", ...parentArgs(), "--json"], "retain");
   const rows = (body && body.data && body.data.sessions) || [];
   const bucket = (body && body.data && body.data.bucket) || [];
   const purged = (body && body.data && body.data.purged) || [];
@@ -488,24 +601,24 @@ async function applyLane(body){
   state.session = body.data.session || state.session;
   state.bucketed = !!body.data.deletion_bucket;
   state.purged = !!body.data.purged;
+  syncChrome();
 }
 async function bucketSession(session){
   if(!session){ setStatus("Create or load a session first."); return; }
-  const body = await run(["session-bucket","--session", session, "--json"], "retain");
+  const body = await run(["session-bucket","--session", session, ...parentArgs(), "--json"], "retain");
   applyLane(body);
+  await showPane("retain");
   setStatus("Moved to the bucket. Restore to Active, or purge to the third list.");
-  showPane("retain");
 }
 async function bucketCurrent(){
-  showPane("retain");
   await bucketSession(state.session || state.source.replace(/\/source$/, ""));
 }
 async function restoreSession(session){
-  const body = await run(["session-restore","--session", session, "--json"], "retain");
+  const body = await run(["session-restore","--session", session, ...parentArgs(), "--json"], "retain");
   applyLane(body);
   if(body && body.ok && body.data && body.data.deletion_bucket){
+    await showPane("retain");
     setStatus("Restored to the bucket.");
-    showPane("retain");
   } else if(body && body.ok){
     setStatus("Restored to Active.");
     showPane("broker");
@@ -513,36 +626,42 @@ async function restoreSession(session){
     showPane("retain");
   }
 }
+async function refreshSessions(){
+  await listSessions();
+  setStatus("Sessions refreshed.");
+}
 async function purgeSession(session){
-  const body = await run(["session-purge","--session", session, "--json"], "retain");
+  const body = await run(["session-purge","--session", session, ...parentArgs(), "--json"], "retain");
   applyLane(body);
+  await showPane("retain");
   setStatus("Moved to the purged list. Restore to the bucket, or destroy to delete files.");
-  showPane("retain");
 }
 async function purgeBucket(){
-  await run(["session-purge","--all","--json"], "retain");
+  await run(["session-purge","--all", ...parentArgs(), "--json"], "retain");
+  await showPane("retain");
   setStatus("Bucket sent to the purged list.");
-  showPane("retain");
 }
 async function destroySession(session){
   if(!window.confirm("Permanently delete this purged session? This cannot be undone.")) return;
-  await run(["session-destroy","--session", session, "--yes", "--json"], "retain");
+  await run(["session-destroy","--session", session, "--yes", ...parentArgs(), "--json"], "retain");
   if(state.session === session){
     state.session = ""; state.source = ""; state.mount = ""; state.log = ""; state.bucketed = false; state.purged = false;
     $("source").value = ""; $("mount").value = ""; $("logPath").value = "";
+    syncChrome();
   }
+  await showPane("retain");
   setStatus("Destroyed from the purged list.");
-  showPane("retain");
 }
 async function destroyPurged(){
   if(!window.confirm("Permanently delete ALL sessions in the purged list? Active and bucketed sessions are not deleted.")) return;
-  await run(["session-destroy","--all","--yes","--json"], "retain");
+  await run(["session-destroy","--all","--yes", ...parentArgs(), "--json"], "retain");
   if(state.purged){
     state.session = ""; state.source = ""; state.mount = ""; state.log = ""; state.bucketed = false; state.purged = false;
     $("source").value = ""; $("mount").value = ""; $("logPath").value = "";
+    syncChrome();
   }
+  await showPane("retain");
   setStatus("Purged list emptied.");
-  showPane("retain");
 }
 async function loadSession(file){
   const body = await run(["session-load","--file", file, "--json"], "session");
@@ -553,24 +672,77 @@ async function loadSession(file){
     state.session = body.data.session || file.replace(/\/session\.json$/, "");
     state.bucketed = !!body.data.deletion_bucket;
     state.purged = !!body.data.purged;
-    showPane("broker");
+    if(body.data.write_prefix) $("prefix").value = state.prefix = body.data.write_prefix;
+    syncChrome();
+    await showPane(state.bucketed || state.purged ? "retain" : "broker");
+    if(state.bucketed || state.purged) setStatus("Restore this session to Active before starting.");
   }
 }
 async function policyCheck(){
-  const body = await run(["policy-check","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--json"], "policy");
+  const argv = ["policy-check","--source",$("source").value,"--mount",$("mount").value];
+  if(writesEnabled()) argv.push("--write-prefix", $("prefix").value);
+  argv.push("--json");
+  const body = await run(argv, "policy");
   $("policyJSON").textContent = JSON.stringify(body && body.data, null, 2);
 }
 async function previewStart(){
-  if(state.bucketed || state.purged){
+  if(startBlocked()){
     setStatus("Restore this session to Active before starting.");
     showPane("retain");
     return;
   }
-  const body = await run(["start","--dry-run","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start");
-  $("policyJSON").textContent = JSON.stringify(body && body.data, null, 2);
+  const source = $("source").value;
+  const mount = $("mount").value;
+  if(!source || !mount){
+    setStatus("Source and mount paths are required.");
+    showPane("broker");
+    return;
+  }
+  const argv = ["start","--dry-run","--json","--source", source, "--mount", mount, "--delay-ms", delayMs(), "--binary", "/helper/spindleguard"];
+  if(writesEnabled()) argv.push("--write-prefix", $("prefix").value);
+  const body = await run(argv, "start");
+  $("policyJSON").textContent = JSON.stringify(body && (body.data || body.stderr), null, 2);
+  if(body && body.ok) setStatus("Start preview (no mount).");
+}
+async function previewUnmount(){
+  const mount = $("mount").value;
+  if(!mount){ setStatus("Mount path is required."); showPane("broker"); return; }
+  const body = await run(["unmount","--mount", mount, "--dry-run","--json"], "start");
+  $("policyJSON").textContent = JSON.stringify(body && (body.data || body.stderr), null, 2);
+  if(body && body.ok) setStatus("Unmount dry-run only. Preview does not mount.");
+}
+async function probeLog(){
+  const log = $("logPath").value;
+  showPane("queue");
+  if(!log){ setStatus("Probe Queue needs a broker log. Create a session first."); return; }
+  const body = await run(["probe-log","--log", log, "--json"], "probe");
+  $("probeJSON").textContent = JSON.stringify(body && (body.data || body.error || body.stderr), null, 2);
+  if(body && body.ok) setStatus("Preview cannot read through a mount. probe-log read the retained log.");
+  else if(body && body.returncode === 1) setStatus("probe-log found no competing wait in this log yet.");
+}
+function loadExample(){
+  $("identityManifest").value = "macos/Resources/example-manifest.json";
+  $("identityFixture").value = "macos/Resources/example-fixture.json";
+  $("identityPath").value = "/dev/sda1";
+  showPane("identity");
+  setStatus("Loaded example fixture. Bind does not open host /dev.");
+}
+function loadFailing(){
+  $("identityManifest").value = "macos/Resources/example-failing-manifest.json";
+  $("identityFixture").value = "macos/Resources/example-fixture.json";
+  $("identityPath").value = "/dev/sda1";
+  showPane("identity");
+  setStatus("Loaded failing-media example. Fingerprint should be skipped.");
 }
 async function bindExample(){
-  await run(["bind","--manifest","macos/Resources/example-manifest.json","--path","/dev/sda1","--fixture","macos/Resources/example-fixture.json"], "bind");
+  await run(["bind","--manifest",$("identityManifest").value,"--path",$("identityPath").value,"--fixture",$("identityFixture").value], "bind");
+}
+async function rotateManifest(){
+  const argv = ["rotate-manifest","--old",$("rotateOld").value,"--observed",$("rotateObserved").value,"--reason",$("rotateReason").value || "preview rotation","--out",$("rotateOut").value,"--audit",$("rotateAudit").value];
+  if($("rotateDry").checked) argv.push("--dry-run");
+  showPane("identity");
+  const body = await run(argv, "bind");
+  if(body && body.ok) setStatus($("rotateDry").checked ? "Rotation dry-run only." : "New manifest generation written.");
 }
 async function topology(){
   const body = await run(["topology","--path",$("source").value || "/tmp"], "topology");
@@ -586,34 +758,31 @@ function extra(action){
   if(action === "preview-setup"){ showPane("setup"); run(["setup","--dry-run","--json"], "setup"); return; }
   if(action === "run-setup"){ showPane("setup"); run(["setup","--json"], "setup"); return; }
   if(action === "verify"){ showPane("setup"); run(["verify","--quick","--json"], "verify"); return; }
-  if(action === "install-fuse"){ showPane("setup"); run(["setup","--install-fuse","--yes","--json"], "setup"); return; }
+  if(action === "install-fuse"){ showPane("setup"); previewInstallFuse(); return; }
   if(action === "copy-fuse"){ copyFuse(); return; }
   if(action === "fuse-docs"){ window.open("https://github.com/macos-fuse-t/fuse-t", "_blank", "noopener"); return; }
   if(action === "doctor"){ showPane("doctor"); run(["doctor","--json"], "doctor"); return; }
   if(action === "new-session"){ newSession(); return; }
-  if(action === "load-session"){ showPane("retain"); setStatus("Choose a retained session to load, or restore one from the bucket."); return; }
+  if(action === "load-session"){ loadSessionPrompt(); return; }
   if(action === "retain"){ showPane("retain"); return; }
   if(action === "bucket-current"){ bucketCurrent(); return; }
   if(action === "purge-bucket"){ purgeBucket(); return; }
   if(action === "empty-purged"){ destroyPurged(); return; }
-  if(action === "session-parent"){ showPane("setup"); setStatus("Session parent is shown on Setup. Preview does not open Finder."); return; }
-  if(action === "start"){
-    if(state.bucketed || state.purged){ showPane("retain"); setStatus("Restore this session to Active before starting."); return; }
-    showPane("broker"); run(["start","--json","--source",$("source").value,"--mount",$("mount").value,"--write-prefix",$("prefix").value,"--delay-ms","150","--binary","/helper/spindleguard"], "start"); return;
-  }
+  if(action === "session-parent"){ openSessionParent(); return; }
+  if(action === "start"){ showPane("broker"); previewStart(); return; }
   if(action === "stop"){ setStatus("Stop is native-only. Preview does not mount."); return; }
-  if(action === "unmount"){ showPane("broker"); run(["unmount","--mount",$("mount").value,"--json"], "start"); return; }
+  if(action === "unmount"){ showPane("broker"); previewUnmount(); return; }
   if(action === "policy"){ policyCheck(); return; }
   if(action === "preview-start"){ previewStart(); return; }
-  if(action === "open-mount"){ setStatus("Open Mount is native Finder. Preview cannot open folders."); return; }
-  if(action === "open-source"){ setStatus("Open Source is native Finder. Preview cannot open folders."); return; }
-  if(action === "reveal-log"){ setStatus("Reveal Log is native Finder. Preview cannot open folders."); return; }
-  if(action === "queue"){ showPane("queue"); setStatus("Probe Queue needs a live mount on macOS."); return; }
+  if(action === "open-mount"){ revealPath("mount","Open Mount"); return; }
+  if(action === "open-source"){ revealPath("source","Open Source"); return; }
+  if(action === "reveal-log"){ revealLog(); return; }
+  if(action === "queue"){ probeLog(); return; }
   if(action === "scan"){ showPane("identity"); run(["scan","--root",".","--json"], "scan"); return; }
   if(action === "bind"){ showPane("identity"); bindExample(); return; }
-  if(action === "example"){ showPane("identity"); setStatus("Loaded example fixture. Bind does not open host /dev."); return; }
-  if(action === "failing"){ showPane("identity"); setStatus("Loaded failing-media example. Fingerprint should be skipped."); return; }
-  if(action === "rotate"){ showPane("identity"); setStatus("Rotation stays on Identity. Dry-run is the default."); return; }
+  if(action === "example"){ loadExample(); return; }
+  if(action === "failing"){ loadFailing(); return; }
+  if(action === "rotate"){ rotateManifest(); return; }
   if(action === "topology"){ topology(); return; }
   if(action === "quit"){ setStatus("Quit is native-only. Close this preview tab instead."); return; }
 }
@@ -647,7 +816,7 @@ function renderWizard(){
   const steps = [
     `<h3>Welcome</h3><p>SpindleGuard is a test-only prototype. It does not protect evidence drives or confine agents.</p><p>It refuses /Volumes and /dev. Three lists: active, bucket, and purged. Destroy only deletes from the purged list.</p><p class="lede">This wizard checks the Mac, optionally installs FUSE-T (only if you confirm), builds the broker and this app, verifies the install, then can create a disposable session.</p>`,
     `<h3>This Mac</h3><p class="lede">Doctor does not mount and does not open /dev.</p><div class="row"><button type="button" onclick="run(['doctor','--json'], 'doctor')">Refresh checks</button></div><div class="checks" id="wizardChecks"></div>`,
-    `<h3>FUSE-T</h3><p class="lede">Needed only to mount. Homebrew is never run unless you confirm.</p><pre id="wizardFuse"></pre><div class="row"><button type="button" onclick="copyFuse()">Copy install command</button><button type="button" onclick="run(['setup','--install-fuse','--yes','--json'], 'setup')">Install FUSE-T…</button><button type="button" onclick="window.open('https://github.com/macos-fuse-t/fuse-t','_blank','noopener')">Open docs</button></div>`,
+    `<h3>FUSE-T</h3><p class="lede">Needed only to mount. Homebrew is never run unless you confirm. This preview copies the command instead of installing.</p><pre id="wizardFuse"></pre><div class="row"><button type="button" onclick="copyFuse()">Copy install command</button><button type="button" onclick="previewInstallFuse()">Install FUSE-T…</button><button type="button" onclick="window.open('https://github.com/macos-fuse-t/fuse-t','_blank','noopener')">Open docs</button></div>`,
     `<h3>Build</h3><p class="lede">Run Setup builds the Swift app when swiftc is present, and the C broker only when FUSE-T is already installed.</p><div class="row"><button type="button" onclick="run(['setup','--dry-run','--json'], 'setup')">Preview setup</button><button type="button" onclick="run(['setup','--json'], 'setup')">Run setup</button></div><pre id="wizardSetup"></pre>`,
     `<h3>Verify</h3><p class="lede">Quick checks only: policy, scan, fixture bind, CLI. No FUSE mounts.</p><div class="row"><button type="button" onclick="run(['verify','--quick','--json'], 'verify')">Verify install</button></div><pre id="wizardVerify"></pre>`,
     `<h3>Disposable session</h3><p class="lede">Creates a retained source and mount under the session parent. Files stay on Active until you bucket, purge, then destroy them. After Finish you can Start from Broker when this Mac can mount.</p><div class="row"><button type="button" onclick="newSession()">New disposable session</button></div>`
@@ -667,6 +836,10 @@ showPane("setup");
 tick();
 setInterval(tick, 1000);
 setStatus(state.status);
+["source","mount","logPath","prefix","sessionParent"].forEach(id => $(id).addEventListener("input", syncChrome));
+$("writable").addEventListener("change", syncChrome);
+$("delay").addEventListener("input", syncChrome);
+syncChrome();
 run(["doctor","--json"], "doctor").then(() => maybePresentWizard());
 </script>
 </body>

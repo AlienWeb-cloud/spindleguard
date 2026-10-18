@@ -144,6 +144,84 @@ class SgCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("fingerprint skipped: media_class=failing", result.stderr)
 
+    def test_probe_log_refuses_volumes_and_dev(self):
+        volumes = run_sg("probe-log", "--log", "/Volumes/exhibit/broker.jsonl", "--json")
+        self.assertEqual(volumes.returncode, 2)
+        self.assertIn("Prototype refuses /Volumes paths", volumes.stderr)
+        device = run_sg("probe-log", "--log", "/dev/disk0", "--json")
+        self.assertEqual(device.returncode, 2)
+        self.assertIn("Prototype refuses /dev paths", device.stderr)
+
+    def test_start_refuses_bucket_and_purged(self):
+        binary = "/tmp/spindleguard-not-a-broker"
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            created = json.loads(
+                run_sg("session-create", "--parent", str(parent), "--json").stdout
+            )
+            active = run_sg(
+                "start",
+                "--dry-run",
+                "--json",
+                "--source",
+                created["source"],
+                "--mount",
+                created["mount"],
+                "--write-prefix",
+                "/Workspace",
+                "--binary",
+                binary,
+            )
+            self.assertEqual(active.returncode, 0, active.stderr)
+            run_sg(
+                "session-bucket",
+                "--session",
+                created["session"],
+                "--parent",
+                str(parent),
+                "--json",
+            )
+            listed = json.loads(run_sg("session-list", "--parent", str(parent), "--json").stdout)
+            bucketed = listed["bucket"][0]
+            refused = run_sg(
+                "start",
+                "--dry-run",
+                "--json",
+                "--source",
+                bucketed["source"],
+                "--mount",
+                bucketed["mount"],
+                "--write-prefix",
+                "/Workspace",
+                "--binary",
+                binary,
+            )
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn("Restore this session to Active before starting.", refused.stderr)
+            run_sg(
+                "session-purge",
+                "--session",
+                bucketed["session"],
+                "--parent",
+                str(parent),
+                "--json",
+            )
+            listed = json.loads(run_sg("session-list", "--parent", str(parent), "--json").stdout)
+            purged = listed["purged"][0]
+            refused = run_sg(
+                "start",
+                "--dry-run",
+                "--json",
+                "--source",
+                purged["source"],
+                "--mount",
+                purged["mount"],
+                "--binary",
+                binary,
+            )
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn("Restore this session to Active before starting.", refused.stderr)
+
     def test_probe_log(self):
         payload = json.loads((PROJECT / "queue-proof.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as tmp:

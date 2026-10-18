@@ -511,13 +511,23 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func refuseInactiveSession() -> Bool {
+        if sessionBucketed || sessionPurged {
+            error = PathPolicy.inactiveSessionMessage
+            pane = .retain
+            return true
+        }
+        if let refusal = PathPolicy.startRefusal(source) ?? PathPolicy.startRefusal(mount) {
+            error = refusal
+            pane = .retain
+            return true
+        }
+        return false
+    }
+
     func start() {
         error = ""
-        if sessionBucketed || sessionPurged {
-            error = "Restore this session to Active before starting."
-            pane = .retain
-            return
-        }
+        if refuseInactiveSession() { return }
         if let problem = policyProblem {
             error = problem
             pane = .broker
@@ -702,11 +712,7 @@ final class AppState: ObservableObject {
 
     func previewStart() {
         error = ""
-        if sessionBucketed || sessionPurged {
-            error = "Restore this session to Active before starting."
-            pane = .retain
-            return
-        }
+        if refuseInactiveSession() { return }
         var args = [
             "start", "--dry-run", "--json",
             "--source", source,

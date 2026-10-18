@@ -160,6 +160,12 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("import UniformTypeIdentifiers", state)
         self.assertIn("sessionParent()", (MACOS / "SGPaths.swift").read_text(encoding="utf-8"))
         self.assertIn("func unmount(mount: String)", (MACOS / "BrokerService.swift").read_text(encoding="utf-8"))
+        policy = (MACOS / "PathPolicy.swift").read_text(encoding="utf-8")
+        self.assertIn("static func startRefusal", policy)
+        self.assertIn("inactiveSessionMessage", policy)
+        self.assertIn("Restore this session to Active before starting.", policy)
+        self.assertIn("refuseInactiveSession", state)
+        self.assertIn("PathPolicy.startRefusal", (MACOS / "BrokerService.swift").read_text(encoding="utf-8"))
 
     def test_preview_html_mirrors_native_chrome(self):
         page = (MACOS / "preview.html").read_text(encoding="utf-8")
@@ -185,6 +191,19 @@ class AppBundleTests(unittest.TestCase):
         self.assertIn("maybePresentWizard", page)
         self.assertIn("New Disposable Session", page)
         self.assertIn("Resolve Topology", page)
+        self.assertIn('id="sessionParent"', page)
+        self.assertIn('id="writable"', page)
+        self.assertIn('id="delay"', page)
+        self.assertIn('id="identityManifest"', page)
+        self.assertIn('id="rotateDry"', page)
+        self.assertIn("probe-log", page)
+        self.assertIn("rotate-manifest", page)
+        self.assertIn("previewInstallFuse", page)
+        self.assertIn("previewUnmount", page)
+        self.assertIn('["start","--dry-run"', page)
+        self.assertIn('["unmount","--mount", mount, "--dry-run","--json"]', page)
+        self.assertNotIn("--install-fuse", page)
+        self.assertNotIn('["start","--json"', page)
 
     def test_info_plist(self):
         info = plistlib.loads((MACOS / "Info.plist").read_bytes())

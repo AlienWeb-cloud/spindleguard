@@ -47,6 +47,9 @@ final class BrokerService {
         ) {
             throw NSError(domain: "SpindleGuard", code: 2, userInfo: [NSLocalizedDescriptionKey: err])
         }
+        if let refusal = PathPolicy.startRefusal(source) ?? PathPolicy.startRefusal(mount) {
+            throw NSError(domain: "SpindleGuard", code: 2, userInfo: [NSLocalizedDescriptionKey: refusal])
+        }
         var args = [source, mount]
         let writable = writePrefix != nil
         if writable || delayMs > 0 {

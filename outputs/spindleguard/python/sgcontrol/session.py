@@ -38,6 +38,7 @@ MSG_NOT_ACTIVE = "only an active session can be moved to the bucket"
 MSG_NOT_UNDER_PARENT = "session must be under the session parent"
 MSG_NAME_COLLISION = "a session with that name already exists at the destination"
 MSG_PURGE_YES = MSG_DESTROY_YES
+MSG_START_INACTIVE = "Restore this session to Active before starting."
 
 
 def default_parent(project_root: Path) -> Path:
@@ -120,6 +121,27 @@ def infer_parent(session: Path) -> Path:
     if session.parent.name in (BUCKET_DIR, PURGED_DIR):
         return session.parent.parent
     return session.parent
+
+
+def start_refusal(path: str) -> str | None:
+    """Block start when a path is inside a bucketed or purged ui-session.
+
+    Active sessions and ordinary disposable directories are allowed. The
+    check follows the resolved path, so a renamed parent still counts.
+    """
+    if not path:
+        return None
+    try:
+        current = Path(path).resolve()
+    except OSError:
+        current = Path(path)
+    for parent in (current, *current.parents):
+        if not SESSION_NAME_RE.match(parent.name):
+            continue
+        if parent.parent.name in (BUCKET_DIR, PURGED_DIR):
+            return MSG_START_INACTIVE
+        return None
+    return None
 
 
 def _lanes(parent: Path) -> dict[str, Path]:
